@@ -688,7 +688,7 @@ ospf_iface_reconfigure(struct ospf_iface *ifa, struct ospf_iface_patt *new)
     ifa->inftransdelay = new->inftransdelay;
   }
 
-#ifdef OSPFv2	
+#ifdef OSPFv2
   /* AUTHENTICATION */
   if (ifa->autype != new->autype)
   {
@@ -890,7 +890,7 @@ ospf_ifaces_reconfigure(struct ospf_area *oa, struct ospf_area_config *nac)
 	  ospf_iface_shutdown(ifa);
 	  ospf_iface_remove(ifa);
 	}
-	
+
 	ospf_iface_new(oa, a, ip);
       }
     }
@@ -949,6 +949,19 @@ ospf_ifa_notify(struct proto *p, unsigned flags, struct ifa *a)
       if (done0 > 1)
 	log(L_WARN "%s: Interface %s matches for multiple areas",
 	    p->name,  a->iface->name);
+
+      /* If autoconfiguration is enabled, and we found no matching information in the OSPF configuration
+       * regarding the interface that just came up, enable HOMENETAUTOCONF-OSPF on that interface.
+       */
+      if(po->homenet_autoconf && !done0)
+      {
+        if(po->backbone)
+        {
+          ospf_iface_new(po->backbone,a,po->homenet_autoconf_d);
+        }
+        else
+          log(L_WARN "%s: Cannot add interface %s (IP %s) to backbone. Backbone does not exist", p->name,  a->iface->name);
+      }
     }
 
     if (flags & IF_CHANGE_DOWN)

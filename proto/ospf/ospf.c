@@ -8,7 +8,7 @@
 
 /**
  * DOC: Open Shortest Path First (OSPF)
- * 
+ *
  * The OSPF protocol is quite complicated and its complex implemenation is
  * split to many files. In |ospf.c|, you will find mainly the interface
  * for communication with the core (e.g., reconfiguration hooks, shutdown
@@ -72,7 +72,7 @@
  * (&proto_ospf->tick). It is responsible for aging and flushing of LSAs in
  * the database, for routing table calculaction and it call area_disp() of every
  * ospf_area.
- * 
+ *
  * The function area_disp() is
  * responsible for late originating of router LSA and network LSA
  * and for cleanup before routing table calculation process in
@@ -84,7 +84,7 @@
  * BIRD's OSPF implementation respects RFC2328 in every detail, but
  * some of internal algorithms do differ. The RFC recommends making a snapshot
  * of the link-state database when a new adjacency is forming and sending
- * the database description packets based on the information in this 
+ * the database description packets based on the information in this
  * snapshot. The database can be quite large in some networks, so
  * rather we walk through a &slist structure which allows us to
  * continue even if the actual LSA we were working with is deleted. New
@@ -190,7 +190,7 @@ ospf_area_remove(struct ospf_area *oa)
 
   /* We suppose that interfaces are already removed */
   ospf_flush_area(oa->po, oa->areaid);
- 
+
   fib_free(&oa->rtr);
   fib_free(&oa->net_fib);
   fib_free(&oa->enet_fib);
@@ -218,7 +218,7 @@ static struct ospf_iface *
 ospf_find_vlink(struct proto_ospf *po, u32 voa, u32 vid)
 {
   struct ospf_iface *ifa;
-  WALK_LIST(ifa, po->iface_list) 
+  WALK_LIST(ifa, po->iface_list)
     if ((ifa->type == OSPF_IT_VLINK) && (ifa->voa->areaid == voa) && (ifa->vid == vid))
       return ifa;
   return NULL;
@@ -233,6 +233,8 @@ ospf_start(struct proto *p)
 
   po->router_id = proto_get_router_id(p->cf);
   po->rfc1583 = c->rfc1583;
+  po->homenet_autoconf = c->homenet_autoconf;
+  po->homenet_autoconf_d = c->homenet_autoconf_d;
   po->ebit = 0;
   po->ecmp = c->ecmp;
   po->tick = c->tick;
@@ -731,6 +733,9 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
   if (po->rfc1583 != new->rfc1583)
     return 0;
 
+  if(po->homenet_autoconf != new->homenet_autoconf)
+    return 0; /* FIXME Can we reconfigure gracefully? */
+
   if (old->abr != new->abr)
     return 0;
 
@@ -766,6 +771,14 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
       ospf_iface_new(po->backbone, NULL, ip);
   }
 
+  /* Update auto-configuration on other interfaces */
+  if(po->homenet_autoconf)
+  {
+    WALK_LIST(ifa, po->iface_list)
+      if(ifa->marked)
+        ospf_iface_reconfigure(ifa,new->homenet_autoconf_d);
+  }
+
   /* Delete remaining ifaces and areas */
   WALK_LIST_DELSAFE(ifa, ifx, po->iface_list)
     if (ifa->marked)
@@ -779,7 +792,7 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
       ospf_area_remove(oa);
 
   schedule_rtcalc(po);
-  
+
   return 1;
 }
 
@@ -826,7 +839,8 @@ ospf_sh(struct proto *p)
   }
 
   cli_msg(-1014, "%s:", p->name);
-  cli_msg(-1014, "RFC1583 compatibility: %s", (po->rfc1583 ? "enable" : "disabled"));
+  cli_msg(-1014, "RFC1583 compatibility: %s", (po->rfc1583 ? "enabled" : "disabled"));
+  cli_msg(-1014, "Homenet autoconfiguration: %s", (po->homenet_autoconf ? "enabled" : "disabled"));
   cli_msg(-1014, "RT scheduler tick: %d", po->tick);
   cli_msg(-1014, "Number of areas: %u", po->areano);
   cli_msg(-1014, "Number of LSAs in DB:\t%u", po->gr->hash_entries);
@@ -995,14 +1009,14 @@ lsa_compare_for_state(const void *p1, const void *p2)
 
     return lsa1->sn - lsa2->sn;
   }
-  else 
+  else
   {
     if (lsa1->rt != lsa2->rt)
       return lsa1->rt - lsa2->rt;
 
     if (lsa1->type != lsa2->type)
       return lsa1->type - lsa2->type;
-  
+
     if (lsa1->id != lsa2->id)
       return lsa1->id - lsa2->id;
 
@@ -1010,7 +1024,7 @@ lsa_compare_for_state(const void *p1, const void *p2)
     if (px1 != px2)
       return px1 - px2;
 #endif
-  
+
     return lsa1->sn - lsa2->sn;
   }
 }
@@ -1028,7 +1042,7 @@ ext_compare_for_state(const void *p1, const void *p2)
 
   if (lsa1->id != lsa2->id)
     return lsa1->id - lsa2->id;
- 
+
   return lsa1->sn - lsa2->sn;
 }
 
@@ -1077,7 +1091,7 @@ show_lsa_router(struct proto_ospf *po, struct top_hash_entry *he, int first, int
 	struct ospf_lsa_header *net_lsa = &(net_he->lsa);
 	struct ospf_lsa_net *net_ln = net_he->lsa_body;
 
-	cli_msg(-1016, "\t\tnetwork %I/%d metric %u", 
+	cli_msg(-1016, "\t\tnetwork %I/%d metric %u",
 		ipa_and(ipa_from_u32(net_lsa->id), net_ln->netmask),
 		ipa_mklen(net_ln->netmask), rr[i].metric);
       }
@@ -1153,7 +1167,7 @@ show_lsa_sum_rt(struct top_hash_entry *he)
   options = 0;
 #else /* OSPFv3 */
   struct ospf_lsa_sum_rt *ls = he->lsa_body;
-  dst_rid = ls->drid; 
+  dst_rid = ls->drid;
   options = ls->options & OPTIONS_MASK;
 #endif
 
@@ -1191,7 +1205,7 @@ show_lsa_external(struct top_hash_entry *he)
   rt_fwaddr_valid = ext->metric & LSA_EXT_FBIT;
   if (rt_fwaddr_valid)
     buf = lsa_get_ipv6_addr(buf, &rt_fwaddr);
-  else 
+  else
     rt_fwaddr = IPA_NONE;
 
   if (ext->metric & LSA_EXT_TBIT)
@@ -1199,7 +1213,7 @@ show_lsa_external(struct top_hash_entry *he)
   else
     rt_tag = 0;
 #endif
-  
+
   if (rt_fwaddr_valid)
     bsprintf(str_via, " via %I", rt_fwaddr);
 
@@ -1262,7 +1276,7 @@ ospf_sh_state(struct proto *p, int verbose, int reachable)
     return;
   }
 
-  /* We store interesting area-scoped LSAs in array hea and 
+  /* We store interesting area-scoped LSAs in array hea and
      global-scoped (LSA_T_EXT) LSAs in array hex */
 
   struct top_hash_entry *hea[num];
@@ -1460,7 +1474,7 @@ lsa_compare_for_lsadb(const void *p1, const void *p2)
 
   if (lsa1->rt != lsa2->rt)
     return lsa1->rt - lsa2->rt;
-  
+
   if (lsa1->id != lsa2->id)
     return lsa1->id - lsa2->id;
 
@@ -1522,7 +1536,7 @@ ospf_sh_lsadb(struct lsadb_show_data *ld)
 
     if (ld->router && (lsa->rt != ld->router))
       continue;
-    
+
     if ((dscope != last_dscope) || (hea[i]->domain != last_domain))
     {
       cli_msg(-1017, "");

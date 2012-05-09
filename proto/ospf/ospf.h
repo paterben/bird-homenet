@@ -73,6 +73,7 @@ do { if ((p->debug & D_PACKETS) || OSPF_FORCE_DEBUG) \
 
 #define DEFAULT_OSPFTICK 1
 #define DEFAULT_RFC1583 0	/* compatibility with rfc1583 */
+#define DEFAULT_HOMENETAUTOCONF 0 /* OSPF autoconfiguration off by default */
 #define DEFAULT_STUB_COST 1000
 #define DEFAULT_ECMP_LIMIT 16
 #define DEFAULT_TRANSINT 40
@@ -83,10 +84,15 @@ struct ospf_config
   struct proto_config c;
   unsigned tick;
   byte rfc1583;
+  byte homenet_autoconf;
   byte abr;
   int ecmp;
   list area_list;		/* list of struct ospf_area_config */
   list vlink_list;		/* list of struct ospf_iface_patt */
+  struct ospf_iface_patt *homenet_autoconf_d;
+    /* Default interface configuration for homenet autoconf.
+       This will be applied to all interfaces not otherwise
+       listed in configuration file, if homenet_autoconf is true. */
 };
 
 struct nbma_node
@@ -94,7 +100,7 @@ struct nbma_node
   node n;
   ip_addr ip;
   byte eligible;
-  byte found; 
+  byte found;
 };
 
 struct area_net_config
@@ -249,7 +255,7 @@ struct ospf_iface
 #define HELLOINT_D 10
 #define POLLINT_D 20
 #define DEADC_D 4
-#define WAIT_DMH 4		
+#define WAIT_DMH 4
   /* Value of Wait timer - not found it in RFC * - using 4*HELLO */
 
   struct top_hash_entry *net_lsa;	/* Originated network LSA */
@@ -768,6 +774,7 @@ struct proto_ospf
   int areano;			/* Number of area I belong to */
   struct fib rtf;		/* Routing table */
   byte rfc1583;			/* RFC1583 compatibility */
+  byte homenet_autoconf;        /* Is this a special autoconfiguring OSPF instance? */
   byte ebit;			/* Did I originate any ext lsa? */
   byte ecmp;			/* Maximal number of nexthops in ECMP route, or 0 */
   struct ospf_area *backbone;	/* If exists */
@@ -775,6 +782,10 @@ struct proto_ospf
   int lsab_size, lsab_used;
   linpool *nhpool;		/* Linpool used for next hops computed in SPF */
   u32 router_id;
+  struct ospf_iface_patt *homenet_autoconf_d;
+    /* Default interface configuration for homenet autoconf.
+       This will be applied to all interfaces not otherwise
+       listed in configuration file, if homenet_autoconf is true. */
 };
 
 struct ospf_iface_patt

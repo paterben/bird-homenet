@@ -19,7 +19,7 @@ static struct ospf_area_config *this_area;
 static struct nbma_node *this_nbma;
 static list *this_nets;
 static struct area_net_config *this_pref;
-static struct ospf_stubnet_config *this_stubnet; 
+static struct ospf_stubnet_config *this_stubnet;
 
 #ifdef OSPFv2
 static void
@@ -101,6 +101,16 @@ ospf_proto_finish(void)
 
   if (!cf->abr && !EMPTY_LIST(cf->vlink_list))
     cf_error( "Vlinks cannot be used on single area router");
+
+  if(cf->homenet_autoconf && !backbone)
+    cf_error( "Homenet autoconfiguration requires area 0 to be configured");
+}
+
+static void
+ospf_homenet_autoconf_finish(void)
+{
+  ospf_iface_finish();
+  /* FIXME other tests needed? */
 }
 
 static inline void
@@ -120,7 +130,7 @@ CF_KEYWORDS(NONE, SIMPLE, AUTHENTICATION, STRICT, CRYPTOGRAPHIC)
 CF_KEYWORDS(ELIGIBLE, POLL, NETWORKS, HIDDEN, VIRTUAL, CHECK, LINK)
 CF_KEYWORDS(RX, BUFFER, LARGE, NORMAL, STUBNET, HIDDEN, SUMMARY, TAG, EXTERNAL)
 CF_KEYWORDS(WAIT, DELAY, LSADB, ECMP, LIMIT, WEIGHT, NSSA, TRANSLATOR, STABILITY)
-CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF)
+CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, HOMENETAUTOCONF)
 
 %type <t> opttext
 %type <ld> lsadb_args
@@ -134,6 +144,7 @@ ospf_proto_start: proto_start OSPF {
      init_list(&OSPF_CFG->area_list);
      init_list(&OSPF_CFG->vlink_list);
      OSPF_CFG->rfc1583 = DEFAULT_RFC1583;
+     OSPF_CFG->homenet_autoconf = DEFAULT_HOMENETAUTOCONF;
      OSPF_CFG->tick = DEFAULT_OSPFTICK;
   }
  ;
@@ -146,6 +157,7 @@ ospf_proto:
 ospf_proto_item:
    proto_item
  | RFC1583COMPAT bool { OSPF_CFG->rfc1583 = $2; }
+ | ospf_homenet_autoconf
  | ECMP bool { OSPF_CFG->ecmp = $2 ? DEFAULT_ECMP_LIMIT : 0; }
  | ECMP bool LIMIT expr { OSPF_CFG->ecmp = $2 ? $4 : 0; if ($4 < 0) cf_error("ECMP limit cannot be negative"); }
  | TICK expr { OSPF_CFG->tick = $2; if($2<=0) cf_error("Tick must be greater than zero"); }
@@ -203,7 +215,7 @@ ospf_stubnet_start:
      add_tail(&this_area->stubnet_list, NODE this_stubnet);
      this_stubnet->px = $1;
      this_stubnet->cost = COST_D;
-   } 
+   }
  ;
 
 ospf_stubnet_opts:
@@ -237,7 +249,7 @@ ospf_vlink_item:
  | AUTHENTICATION NONE { OSPF_PATT->autype = OSPF_AUTH_NONE ; }
  | AUTHENTICATION SIMPLE { OSPF_PATT->autype = OSPF_AUTH_SIMPLE ; }
  | AUTHENTICATION CRYPTOGRAPHIC { OSPF_PATT->autype = OSPF_AUTH_CRYPT ; }
- | password_list 
+ | password_list
  ;
 
 ospf_vlink_start: VIRTUAL LINK idval
@@ -287,9 +299,9 @@ ospf_iface_item:
  | AUTHENTICATION NONE { OSPF_PATT->autype = OSPF_AUTH_NONE ; }
  | AUTHENTICATION SIMPLE { OSPF_PATT->autype = OSPF_AUTH_SIMPLE ; }
  | AUTHENTICATION CRYPTOGRAPHIC { OSPF_PATT->autype = OSPF_AUTH_CRYPT ; }
- | RX BUFFER LARGE { OSPF_PATT->rxbuf = OSPF_RXBUF_LARGE ; } 
- | RX BUFFER NORMAL { OSPF_PATT->rxbuf = OSPF_RXBUF_NORMAL ; } 
- | RX BUFFER expr { OSPF_PATT->rxbuf = $3 ; if (($3 < OSPF_RXBUF_MINSIZE) || ($3 > OSPF_MAX_PKT_SIZE)) cf_error("Buffer size must be in range 256-65535"); } 
+ | RX BUFFER LARGE { OSPF_PATT->rxbuf = OSPF_RXBUF_LARGE ; }
+ | RX BUFFER NORMAL { OSPF_PATT->rxbuf = OSPF_RXBUF_NORMAL ; }
+ | RX BUFFER expr { OSPF_PATT->rxbuf = $3 ; if (($3 < OSPF_RXBUF_MINSIZE) || ($3 > OSPF_MAX_PKT_SIZE)) cf_error("Buffer size must be in range 256-65535"); }
  | password_list
  ;
 
@@ -323,7 +335,7 @@ ipa_list:
 ipa_item:
     ipa_el
   | ipa_ne;
- 
+
 ipa_el: IPA ';'
  {
    this_nbma = cfg_allocz(sizeof(struct nbma_node));
@@ -342,7 +354,6 @@ ipa_ne: IPA ELIGIBLE ';'
  }
 ;
 
- 
 ospf_iface_start:
  {
   this_ipatt = cfg_allocz(sizeof(struct ospf_iface_patt));
@@ -376,6 +387,43 @@ ospf_iface_opt_list:
 
 ospf_iface:
   ospf_iface_start iface_patt_list ospf_iface_opt_list { ospf_iface_finish(); }
+ ;
+
+ospf_homenet_autoconf:
+   ospf_homenet_autoconf_start '{' ospf_homenet_autoconf_opts '}' { ospf_homenet_autoconf_finish(); }
+ | ospf_homenet_autoconf_start
+ ;
+
+ospf_homenet_autoconf_start: HOMENETAUTOCONF bool
+ {
+  OSPF_CFG->homenet_autoconf = $2;
+  this_ipatt = cfg_allocz(sizeof(struct ospf_iface_patt));
+  OSPF_CFG->homenet_autoconf_d = OSPF_PATT;
+  init_list(&this_ipatt->ipn_list);
+  OSPF_PATT->cost = COST_D;
+  OSPF_PATT->helloint = HELLOINT_D;
+  OSPF_PATT->pollint = POLLINT_D;
+  OSPF_PATT->rxmtint = RXMTINT_D;
+  OSPF_PATT->inftransdelay = INFTRANSDELAY_D;
+  OSPF_PATT->priority = PRIORITY_D;
+  OSPF_PATT->waitint = WAIT_DMH*HELLOINT_D;
+  OSPF_PATT->deadc = DEADC_D;
+  OSPF_PATT->deadint = 0;
+  OSPF_PATT->type = OSPF_IT_UNDEF;
+  init_list(&OSPF_PATT->nbma_list);
+  OSPF_PATT->autype = OSPF_AUTH_NONE;
+  reset_passwords();
+ }
+;
+
+ospf_homenet_autoconf_opts:
+   /* empty */
+ | ospf_homenet_autoconf_opts ospf_homenet_autoconf_item ';'
+ ;
+
+ospf_homenet_autoconf_item:
+   ospf_iface_item /* FIXME should it only be a subset of interface options? */
+ | /* empty for the moment */
  ;
 
 opttext:
