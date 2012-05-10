@@ -953,7 +953,7 @@ ospf_ifa_notify(struct proto *p, unsigned flags, struct ifa *a)
       /* If autoconfiguration is enabled, and we found no matching information in the OSPF configuration
        * regarding the interface that just came up, enable HOMENETAUTOCONF-OSPF on that interface.
        */
-      if(po->homenet_autoconf && !done0)
+      /*if(po->homenet && !done0)
       {
         if(po->backbone)
         {
@@ -961,7 +961,7 @@ ospf_ifa_notify(struct proto *p, unsigned flags, struct ifa *a)
         }
         else
           log(L_WARN "%s: Cannot add interface %s (IP %s) to backbone. Backbone does not exist", p->name,  a->iface->name);
-      }
+      }*/
     }
 
     if (flags & IF_CHANGE_DOWN)

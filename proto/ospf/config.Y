@@ -102,15 +102,15 @@ ospf_proto_finish(void)
   if (!cf->abr && !EMPTY_LIST(cf->vlink_list))
     cf_error( "Vlinks cannot be used on single area router");
 
-  if(cf->homenet_autoconf && !backbone)
-    cf_error( "Homenet autoconfiguration requires area 0 to be configured");
+  /* This should probably be a warning instead of an error. */
+  /* if(cf->homenet && !backbone)
+    cf_error( "Homenet autoconfiguration requires area 0 to be configured"); */
 }
 
 static void
-ospf_homenet_autoconf_finish(void)
+ospf_homenet_finish(void)
 {
-  ospf_iface_finish();
-  /* FIXME other tests needed? */
+  /* FIXME tests needed? */
 }
 
 static inline void
@@ -130,7 +130,7 @@ CF_KEYWORDS(NONE, SIMPLE, AUTHENTICATION, STRICT, CRYPTOGRAPHIC)
 CF_KEYWORDS(ELIGIBLE, POLL, NETWORKS, HIDDEN, VIRTUAL, CHECK, LINK)
 CF_KEYWORDS(RX, BUFFER, LARGE, NORMAL, STUBNET, HIDDEN, SUMMARY, TAG, EXTERNAL)
 CF_KEYWORDS(WAIT, DELAY, LSADB, ECMP, LIMIT, WEIGHT, NSSA, TRANSLATOR, STABILITY)
-CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, HOMENETAUTOCONF)
+CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, OSPFHOMENET)
 
 %type <t> opttext
 %type <ld> lsadb_args
@@ -144,7 +144,7 @@ ospf_proto_start: proto_start OSPF {
      init_list(&OSPF_CFG->area_list);
      init_list(&OSPF_CFG->vlink_list);
      OSPF_CFG->rfc1583 = DEFAULT_RFC1583;
-     OSPF_CFG->homenet_autoconf = DEFAULT_HOMENETAUTOCONF;
+     OSPF_CFG->homenet = DEFAULT_OSPF_HOMENET;
      OSPF_CFG->tick = DEFAULT_OSPFTICK;
   }
  ;
@@ -157,7 +157,7 @@ ospf_proto:
 ospf_proto_item:
    proto_item
  | RFC1583COMPAT bool { OSPF_CFG->rfc1583 = $2; }
- | ospf_homenet_autoconf
+ | ospf_homenet
  | ECMP bool { OSPF_CFG->ecmp = $2 ? DEFAULT_ECMP_LIMIT : 0; }
  | ECMP bool LIMIT expr { OSPF_CFG->ecmp = $2 ? $4 : 0; if ($4 < 0) cf_error("ECMP limit cannot be negative"); }
  | TICK expr { OSPF_CFG->tick = $2; if($2<=0) cf_error("Tick must be greater than zero"); }
@@ -389,42 +389,25 @@ ospf_iface:
   ospf_iface_start iface_patt_list ospf_iface_opt_list { ospf_iface_finish(); }
  ;
 
-ospf_homenet_autoconf:
-   ospf_homenet_autoconf_start '{' ospf_homenet_autoconf_opts '}' { ospf_homenet_autoconf_finish(); }
- | ospf_homenet_autoconf_start
+ospf_homenet:
+   ospf_homenet_start '{' ospf_homenet_opts '}' { ospf_homenet_finish(); }
+ | ospf_homenet_start
  ;
 
-ospf_homenet_autoconf_start: HOMENETAUTOCONF bool
+ospf_homenet_start: OSPFHOMENET bool
  {
-  OSPF_CFG->homenet_autoconf = $2;
-  this_ipatt = cfg_allocz(sizeof(struct ospf_iface_patt));
-  OSPF_CFG->homenet_autoconf_d = OSPF_PATT;
-  init_list(&this_ipatt->ipn_list);
-  OSPF_PATT->cost = COST_D;
-  OSPF_PATT->helloint = HELLOINT_D;
-  OSPF_PATT->pollint = POLLINT_D;
-  OSPF_PATT->rxmtint = RXMTINT_D;
-  OSPF_PATT->inftransdelay = INFTRANSDELAY_D;
-  OSPF_PATT->priority = PRIORITY_D;
-  OSPF_PATT->waitint = WAIT_DMH*HELLOINT_D;
-  OSPF_PATT->deadc = DEADC_D;
-  OSPF_PATT->deadint = 0;
-  OSPF_PATT->type = OSPF_IT_UNDEF;
-  init_list(&OSPF_PATT->nbma_list);
-  OSPF_PATT->autype = OSPF_AUTH_NONE;
-  reset_passwords();
+  OSPF_CFG->homenet = $2;
  }
 ;
 
-ospf_homenet_autoconf_opts:
+ospf_homenet_opts:
    /* empty */
- | ospf_homenet_autoconf_opts ospf_homenet_autoconf_item ';'
+ | ospf_homenet_opts ospf_homenet_item ';'
  ;
 
-ospf_homenet_autoconf_item:
-   ospf_iface_item /* FIXME should it only be a subset of interface options? */
- | /* empty for the moment */
- ;
+ospf_homenet_item:
+  /* empty for the moment */
+;
 
 opttext:
     TEXT

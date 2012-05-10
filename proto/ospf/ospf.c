@@ -233,8 +233,8 @@ ospf_start(struct proto *p)
 
   po->router_id = proto_get_router_id(p->cf);
   po->rfc1583 = c->rfc1583;
-  po->homenet_autoconf = c->homenet_autoconf;
-  po->homenet_autoconf_d = c->homenet_autoconf_d;
+  po->homenet = c->homenet;
+  /*po->homenet_autoconf_d = c->homenet_autoconf_d;*/
   po->ebit = 0;
   po->ecmp = c->ecmp;
   po->tick = c->tick;
@@ -733,7 +733,7 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
   if (po->rfc1583 != new->rfc1583)
     return 0;
 
-  if(po->homenet_autoconf != new->homenet_autoconf)
+  if(po->homenet != new->homenet)
     return 0; /* FIXME Can we reconfigure gracefully? */
 
   if (old->abr != new->abr)
@@ -772,12 +772,12 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
   }
 
   /* Update auto-configuration on other interfaces */
-  if(po->homenet_autoconf)
+  /*if(po->homenet_autoconf)
   {
     WALK_LIST(ifa, po->iface_list)
       if(ifa->marked)
         ospf_iface_reconfigure(ifa,new->homenet_autoconf_d);
-  }
+  }*/
 
   /* Delete remaining ifaces and areas */
   WALK_LIST_DELSAFE(ifa, ifx, po->iface_list)
@@ -840,7 +840,7 @@ ospf_sh(struct proto *p)
 
   cli_msg(-1014, "%s:", p->name);
   cli_msg(-1014, "RFC1583 compatibility: %s", (po->rfc1583 ? "enabled" : "disabled"));
-  cli_msg(-1014, "Homenet autoconfiguration: %s", (po->homenet_autoconf ? "enabled" : "disabled"));
+  cli_msg(-1014, "Homenet autoconfiguration: %s", (po->homenet ? "enabled" : "disabled"));
   cli_msg(-1014, "RT scheduler tick: %d", po->tick);
   cli_msg(-1014, "Number of areas: %u", po->areano);
   cli_msg(-1014, "Number of LSAs in DB:\t%u", po->gr->hash_entries);

@@ -73,7 +73,7 @@ do { if ((p->debug & D_PACKETS) || OSPF_FORCE_DEBUG) \
 
 #define DEFAULT_OSPFTICK 1
 #define DEFAULT_RFC1583 0	/* compatibility with rfc1583 */
-#define DEFAULT_HOMENETAUTOCONF 0 /* OSPF autoconfiguration off by default */
+#define DEFAULT_OSPF_HOMENET 0  /* OSPF homenet autoconfiguration off by default */
 #define DEFAULT_STUB_COST 1000
 #define DEFAULT_ECMP_LIMIT 16
 #define DEFAULT_TRANSINT 40
@@ -84,15 +84,15 @@ struct ospf_config
   struct proto_config c;
   unsigned tick;
   byte rfc1583;
-  byte homenet_autoconf;
+  byte homenet;
   byte abr;
   int ecmp;
   list area_list;		/* list of struct ospf_area_config */
   list vlink_list;		/* list of struct ospf_iface_patt */
-  struct ospf_iface_patt *homenet_autoconf_d;
+  /*struct ospf_iface_patt *homenet_autoconf_d;*/
     /* Default interface configuration for homenet autoconf.
        This will be applied to all interfaces not otherwise
-       listed in configuration file, if homenet_autoconf is true. */
+       listed in configuration file, if homenet is true. */
 };
 
 struct nbma_node
@@ -223,6 +223,7 @@ struct ospf_iface
   s16 px_pos_end;		/* Position of iface in Rt Prefix-LSA, end, exclusive */
 
   u32 dr_iface_id;		/* if drid is valid, this is iface_id of DR (for connecting network) */
+#define OSPF_HOMENET_IID = 666  /* Instance ID of interfaces running HOMENET-OSPF. See RFC TBD */
   u8 instance_id;		/* Used to differentiate between more OSPF
 				   instances on one interface */
 #endif
@@ -774,7 +775,7 @@ struct proto_ospf
   int areano;			/* Number of area I belong to */
   struct fib rtf;		/* Routing table */
   byte rfc1583;			/* RFC1583 compatibility */
-  byte homenet_autoconf;        /* Is this a special autoconfiguring OSPF instance? */
+  byte homenet;                 /* Is this a special autoconfiguring OSPF instance? */
   byte ebit;			/* Did I originate any ext lsa? */
   byte ecmp;			/* Maximal number of nexthops in ECMP route, or 0 */
   struct ospf_area *backbone;	/* If exists */
@@ -782,7 +783,7 @@ struct proto_ospf
   int lsab_size, lsab_used;
   linpool *nhpool;		/* Linpool used for next hops computed in SPF */
   u32 router_id;
-  struct ospf_iface_patt *homenet_autoconf_d;
+  /*struct ospf_iface_patt *homenet_autoconf_d;*/
     /* Default interface configuration for homenet autoconf.
        This will be applied to all interfaces not otherwise
        listed in configuration file, if homenet_autoconf is true. */
