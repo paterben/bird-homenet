@@ -11,6 +11,9 @@
 
 #include "timer.h"
 
+#define LOCAL_DEBUG 1
+#define DEBUGGING 1
+
 /* Ugly structure offset handling macros */
 
 #define OFFSETOF(s, i) ((size_t) &((s *)0)->i)

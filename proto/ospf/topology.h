@@ -74,6 +74,11 @@ void flush_sum_lsa(struct ospf_area *oa, struct fib_node *fn, int type);
 void originate_ext_lsa(struct ospf_area *oa, struct fib_node *fn, int src, u32 metric, ip_addr fwaddr, u32 tag, int pbit);
 void flush_ext_lsa(struct ospf_area *oa, struct fib_node *fn);
 
+#ifdef OSPFv3
+void originate_ac_lsa(struct ospf_area *oa);
+void update_ac_lsa(struct ospf_area *oa);
+#endif
+
 
 #ifdef OSPFv2
 struct top_hash_entry * ospf_hash_find_net(struct top_graph *f, u32 domain, u32 lsa);

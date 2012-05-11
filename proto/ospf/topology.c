@@ -321,7 +321,7 @@ originate_rt_lsa_body(struct ospf_area *oa, u16 *length)
       ln->metric = 0;
       ln->padding = 0;
     }
-    else 
+    else
     {
       /* Network stub entry */
       ln->type = LSART_STUB;
@@ -352,7 +352,7 @@ originate_rt_lsa_body(struct ospf_area *oa, u16 *length)
   rt = po->lsab;
   rt->links = i;
 
-  if (bitv) 
+  if (bitv)
     rt->options |= OPT_RT_V;
 
   *length = po->lsab_used + sizeof(struct ospf_lsa_header);
@@ -477,7 +477,7 @@ originate_rt_lsa(struct ospf_area *oa)
 
   lsa.age = 0;
   lsa.type = LSA_T_RT;
-  
+
 #ifdef OSPFv2
   lsa.options = oa->options;
   lsa.id = po->router_id;
@@ -560,7 +560,7 @@ originate_net_lsa_body(struct ospf_iface *ifa, u16 *length,
 #ifdef OSPFv3
   net->options = options & OPTIONS_MASK;
 #endif
-  
+
   *length = sizeof(struct ospf_lsa_header) + sizeof(struct ospf_lsa_net)
     + nodes * sizeof(u32);
   return net;
@@ -583,7 +583,7 @@ originate_net_lsa(struct ospf_iface *ifa)
   struct proto *p = &po->proto;
   struct ospf_lsa_header lsa;
   u32 dom = ifa->oa->areaid;
-  
+
   void *body;
 
   OSPF_TRACE(D_EVENTS, "Originating network-LSA for iface %s",
@@ -632,7 +632,7 @@ void
 update_net_lsa(struct ospf_iface *ifa)
 {
   struct proto_ospf *po = ifa->oa->po;
- 
+
   if (ifa->net_lsa && ((ifa->net_lsa->inst_t + MINLSINTERVAL) > now))
     return;
   /*
@@ -890,7 +890,7 @@ originate_ext_lsa_body(struct proto_ospf *po, u16 *length, struct fib_node *fn,
   struct ospf_lsa_ext *ext = mb_alloc(po->proto.pool, sizeof(struct ospf_lsa_ext));
   *length = sizeof(struct ospf_lsa_header) + sizeof(struct ospf_lsa_ext);
 
-  ext->metric = metric; 
+  ext->metric = metric;
   ext->netmask = ipa_mkmask(fn->pxlen);
   ext->fwaddr = fwaddr;
   ext->tag = tag;
@@ -1054,7 +1054,7 @@ find_surrogate_fwaddr(struct ospf_area *oa)
  * If I receive a message that new route is installed, I try to originate an
  * external LSA. If @oa is an NSSA area, NSSA-LSA is originated instead.
  * @oa should not be a stub area. @src does not specify whether the LSA
- * is external or NSSA, but it specifies the source of origination - 
+ * is external or NSSA, but it specifies the source of origination -
  * the export from ospf_rt_notify(), or the NSSA-EXT translation.
  *
  * The function also sets flag ebit. If it's the first time, the new router lsa
@@ -1114,7 +1114,7 @@ originate_ext_lsa(struct ospf_area *oa, struct fib_node *fn, int src,
   body = originate_ext_lsa_body(po, &lsa.length, fn, metric, fwaddr, tag, pbit);
   lsasum_calculate(&lsa, body);
 
-  if (src) 
+  if (src)
     fn->x1 = src;
 
   en = lsa_install_new(po, &lsa, dom, body);
@@ -1332,7 +1332,7 @@ void
 originate_prefix_rt_lsa(struct ospf_area *oa)
 {
   struct proto_ospf *po = oa->po;
-  struct proto *p = &po->proto;  
+  struct proto *p = &po->proto;
   struct ospf_lsa_header lsa;
   void *body;
 
@@ -1365,7 +1365,7 @@ prefix_same(u32 *b1, u32 *b2)
   int pxl1 = *b1 >> 24;
   int pxl2 = *b2 >> 24;
   int pxs, i;
-  
+
   if (pxl1 != pxl2)
     return 0;
 
@@ -1505,9 +1505,68 @@ flush_prefix_net_lsa(struct ospf_iface *ifa)
   ifa->pxn_lsa = NULL;
 }
 
+static void *
+originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
+{
+  struct proto_ospf *po = oa->po;
+  struct ospf_lsa_ac *lac;
+  // struct top_hash_entry *en;
+  int tlvc, offset;
+
+  ASSERT(po->lsab_used == 0);
+  lac = lsab_allocz(po, 0 /* ospf_lsa_ac has no fixed-length members */);
+  lac = NULL; /* buffer might be reallocated later */
+
+  tlvc = 0;
+  offset = po->lsab_used;
+
+  lac = po->lsab;
+  *length = po->lsab_used + sizeof(struct ospf_lsa_header);
+  return lsab_flush(po);
+}
+
+void
+originate_ac_lsa(struct ospf_area *oa)
+{
+  struct ospf_lsa_header lsa;
+  struct proto_ospf *po = oa->po;
+  struct proto *p = &po->proto;
+  void *body;
+
+  OSPF_TRACE(D_EVENTS, "Originating AC-LSA for area %R", oa->areaid);
+
+  lsa.age = 0;
+  lsa.type = LSA_T_AC;
+  lsa.id = 0; /* FIXME draft-acee-ospf-ospfv3-autoconfig-01 is not clear here */
+  lsa.rt = po->router_id;
+  lsa.sn = get_seqnum(oa->ac_lsa);
+  u32 dom = oa->areaid;
+
+  body = originate_ac_lsa_body(oa, &lsa.length);
+  lsasum_calculate(&lsa, body);
+  oa->ac_lsa = lsa_install_new(po, &lsa, dom, body);
+  ospf_lsupd_flood(po, NULL, NULL, &lsa, dom, 1);
+}
+
+void
+update_ac_lsa(struct ospf_area *oa)
+{
+struct proto_ospf *po = oa->po;
+
+  if ((oa->ac_lsa) && ((oa->ac_lsa->inst_t + MINLSINTERVAL)) > now)
+    return;
+  /*
+   * Tick is probably set to very low value. We cannot
+   * originate new LSA before MINLSINTERVAL. We will
+   * try to do it next tick.
+   */
+
+  originate_ac_lsa(oa);
+
+  oa->origac = 0;
+}
 
 #endif
-
 
 static void
 ospf_top_ht_alloc(struct top_graph *f)
@@ -1555,7 +1614,7 @@ ospf_top_hash(struct top_graph *f, u32 domain, u32 lsaid, u32 rtrid, u32 type)
   return (
 #ifdef OSPFv2
 	  ((type == LSA_T_NET) ? 0 : ospf_top_hash_u32(rtrid)) +
-	  ospf_top_hash_u32(lsaid) + 
+	  ospf_top_hash_u32(lsaid) +
 #else /* OSPFv3 */
 	  ospf_top_hash_u32(rtrid) +
 	  ((type == LSA_T_RT) ? 0 : ospf_top_hash_u32(lsaid)) +
@@ -1710,7 +1769,7 @@ ospf_hash_find_rt(struct top_graph *f, u32 domain, u32 rtr)
   struct top_hash_entry *rv = NULL;
   struct top_hash_entry *e;
   e = f->hash_table[ospf_top_hash(f, domain, 0, rtr, LSA_T_RT)];
-  
+
   while (e)
     {
       if (e->lsa.rt == rtr && e->lsa.type == LSA_T_RT && e->domain == domain)
@@ -1782,7 +1841,7 @@ ospf_hash_get(struct top_graph *f, u32 domain, u32 lsa, u32 rtr, u32 type)
 void
 ospf_hash_delete(struct top_graph *f, struct top_hash_entry *e)
 {
-  struct top_hash_entry **ee = f->hash_table + 
+  struct top_hash_entry **ee = f->hash_table +
     ospf_top_hash(f, e->domain, e->lsa.id, e->lsa.rt, e->lsa.type);
 
   while (*ee)

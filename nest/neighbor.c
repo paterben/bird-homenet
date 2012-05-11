@@ -231,7 +231,8 @@ neigh_up(neighbor *n, struct iface *i, int scope)
 static void
 neigh_down(neighbor *n)
 {
-  DBG("Flushing neighbor %I on %s\n", n->addr, i->name);
+  /*DBG("Flushing neighbor %I on %s\n", n->addr, i->name);*/
+  DBG("Flushing neighbor %I\n", n->addr);
   rem_node(&n->if_n);
   if (! (n->flags & NEF_BIND))
     n->iface = NULL;
@@ -321,7 +322,7 @@ neigh_ifa_update(struct ifa *a)
 {
   struct iface *i = a->iface;
   node *x, *y;
- 
+
   /* Remove all neighbors whose scope has changed */
   WALK_LIST_DELSAFE(x, y, i->neighbors)
     {

@@ -417,6 +417,17 @@ schedule_rtcalc(struct proto_ospf *po)
   po->calcrt = 1;
 }
 
+#ifdef OSPFv3
+void
+schedule_ac_lsa(struct ospf_area *oa)
+{
+  struct proto *p = &oa->po->proto;
+
+  OSPF_TRACE(D_EVENTS, "Scheduling AC-LSA origination for area %R", oa->areaid);
+  oa->origac = 1;
+}
+#endif
+
 static int
 ospf_reload_routes(struct proto *p)
 {
@@ -437,6 +448,8 @@ ospf_reload_routes(struct proto *p)
  *
  * It invokes aging and when @ospf_area->origrt is set to 1, start
  * function for origination of router, network LSAs.
+ * If this is an OSPF-HOMENET protocol instance, also originates
+ * AC LSAs.
  */
 void
 area_disp(struct ospf_area *oa)
@@ -459,6 +472,12 @@ area_disp(struct ospf_area *oa)
 
     if (ifa->orignet && (ifa->oa == oa))
       update_net_lsa(ifa);
+
+#ifdef OSPFv3
+    /* Now try to originate AC LSAs */
+    if (po->homenet && oa->origac)
+      update_ac_lsa(oa);
+#endif
   }
 }
 
@@ -707,6 +726,7 @@ ospf_area_reconfigure(struct ospf_area *oa, struct ospf_area_config *nac)
 
   oa->marked = 0;
   schedule_rt_lsa(oa);
+  schedule_ac_lsa(oa);
 }
 
 /**

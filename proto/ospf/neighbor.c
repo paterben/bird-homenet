@@ -45,7 +45,7 @@ init_lists(struct ospf_neighbor *n)
 }
 
 /* Resets LSA request and retransmit lists.
- * We do not reset DB summary list iterator here, 
+ * We do not reset DB summary list iterator here,
  * it is reset during entering EXCHANGE state.
  */
 static void
@@ -493,7 +493,7 @@ bdr_election(struct ospf_iface *ifa)
 
   u32 odrid = ifa->drid;
   u32 obdrid = ifa->bdrid;
- 
+
   ifa->drid = ndr ? ndr->rid : 0;
   ifa->drip = ndr ? ndr->ip  : IPA_NONE;
   ifa->bdrid = nbdr ? nbdr->rid : 0;
@@ -619,9 +619,11 @@ static void
 rxmt_timer_hook(timer * timer)
 {
   struct ospf_neighbor *n = (struct ospf_neighbor *) timer->data;
-  // struct proto *p = &n->ifa->oa->po->proto;
   struct top_hash_entry *en;
 
+#ifdef LOCAL_DEBUG
+  struct proto *p = &n->ifa->oa->po->proto;
+#endif
   DBG("%s: RXMT timer fired on interface %s for neigh: %I.\n",
       p->name, n->ifa->iface->name, n->ip);
 
@@ -637,7 +639,7 @@ rxmt_timer_hook(timer * timer)
     ospf_dbdes_send(n, 0);
 
 
-  if (n->state < NEIGHBOR_FULL)	
+  if (n->state < NEIGHBOR_FULL)
     ospf_lsreq_send(n);	/* EXCHANGE or LOADING */
   else
   {

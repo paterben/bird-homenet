@@ -231,7 +231,7 @@ lsasum_check(struct ospf_lsa_header *h, void *body)
       q = ep;
     for (p = sp; p < q; p++)
     {
-      /* 
+      /*
        * I count with bytes from header and than from body
        * but if there is no body, it's appended to header
        * (probably checksum in update receiving) and I go on
@@ -308,7 +308,7 @@ lsa_validate_rt(struct ospf_lsa_header *lsa, struct ospf_lsa_rt *body)
 #ifdef OSPFv2
   if (body->links != max)
     return 0;
-#endif  
+#endif
 
   for (i = 0; i < max; i++)
   {
@@ -381,7 +381,7 @@ lsa_validate_sum_net(struct ospf_lsa_header *lsa, struct ospf_lsa_sum_net *body)
   if (pxl > MAX_PREFIX_LENGTH)
     return 0;
 
-  if (lsa->length != (HDRLEN + sizeof(struct ospf_lsa_sum_net) + 
+  if (lsa->length != (HDRLEN + sizeof(struct ospf_lsa_sum_net) +
 		      IPV6_PREFIX_SPACE(pxl)))
     return 0;
 
@@ -436,7 +436,7 @@ lsa_validate_pxlist(struct ospf_lsa_header *lsa, u32 pxcount, unsigned int offse
       u8 pxl = pxlen((u32 *) (pbuf + offset));
       if (pxl > MAX_PREFIX_LENGTH)
 	return 0;
-  
+
       offset += IPV6_PREFIX_SPACE(pxl);
     }
 
@@ -464,6 +464,12 @@ lsa_validate_prefix(struct ospf_lsa_header *lsa, struct ospf_lsa_prefix *body)
   return lsa_validate_pxlist(lsa, body->pxcount, sizeof(struct ospf_lsa_prefix), (u8 *) body);
 }
 
+static int
+lsa_validate_ac(struct ospf_lsa_header *lsa, struct ospf_lsa_prefix *body)
+{
+    DBG("lsa_validate_ac not implemented yet");
+    return 0;
+}
 #endif
 
 
@@ -497,6 +503,8 @@ lsa_validate(struct ospf_lsa_header *lsa, void *body)
       return lsa_validate_link(lsa, body);
     case LSA_T_PREFIX:
       return lsa_validate_prefix(lsa, body);
+    case LSA_T_AC:
+      return lsa_validate_ac(lsa,body);
 #endif
     default:
       /* In OSPFv3, unknown LSAs are OK,
@@ -532,7 +540,7 @@ lsa_install_new(struct proto_ospf *po, struct ospf_lsa_header *lsa, u32 domain, 
   else
   {
     if ((en->lsa.length != lsa->length)
-#ifdef OSPFv2       
+#ifdef OSPFv2
 	|| (en->lsa.options != lsa->options)
 #endif
 	|| (en->lsa.age == LSA_MAXAGE)

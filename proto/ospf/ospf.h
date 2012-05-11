@@ -223,7 +223,8 @@ struct ospf_iface
   s16 px_pos_end;		/* Position of iface in Rt Prefix-LSA, end, exclusive */
 
   u32 dr_iface_id;		/* if drid is valid, this is iface_id of DR (for connecting network) */
-#define OSPF_HOMENET_IID = 666  /* Instance ID of interfaces running HOMENET-OSPF. See RFC TBD */
+#define OSPF_HOMENET_IID = 240  /* Instance ID of interfaces running HOMENET-OSPF. See RFC TBD */
+ /* IID 240(0xF0): unassigned by IANA */
   u8 instance_id;		/* Used to differentiate between more OSPF
 				   instances on one interface */
 #endif
@@ -265,6 +266,7 @@ struct ospf_iface
   int origlink;				/* Schedule link LSA origination */
   struct top_hash_entry *link_lsa;	/* Originated link LSA */
   struct top_hash_entry *pxn_lsa;	/* Originated prefix LSA */
+  struct top_hash_entry *ac_lsa;        /* Originated AC LSA */
 #endif
   int fadj;				/* Number of full adjacent neigh */
   list nbma_list;
@@ -400,7 +402,8 @@ struct ospf_lsa_header
 #define LSA_T_NSSA	0x2007
 #define LSA_T_LINK	0x0008
 #define LSA_T_PREFIX	0x2009
-
+#define LSA_T_AC        0xBFF0 /* Auto-Configuration LSA */
+  /* function code 8176(0x1FF0): experimental, U-bit=1, Area Scope */
 #define LSA_UBIT	0x8000
 
 #define LSA_SCOPE_LINK	0x0000
@@ -554,6 +557,8 @@ struct ospf_lsa_prefix
   u32 ref_rt;
   u32 rest[];
 };
+
+typedef u32 ospf_lsa_ac[];
 
 #define LSA_EXT_EBIT 0x4000000
 #define LSA_EXT_FBIT 0x2000000
@@ -743,12 +748,14 @@ struct ospf_area
   u32 areaid;
   struct ospf_area_config *ac;	/* Related area config */
   struct top_hash_entry *rt;	/* My own router LSA */
+  struct top_hash_entry *ac_lsa;  /* Originated AC LSA */
   struct top_hash_entry *pxr_lsa; /* Originated prefix LSA */
   list cand;			/* List of candidates for RT calc. */
   struct fib net_fib;		/* Networks to advertise or not */
   struct fib enet_fib;		/* External networks for NSSAs */
   u32 options;			/* Optional features */
   byte origrt;			/* Rt lsa origination scheduled? */
+  byte origac;                  /* AC lsa origination scheduled? */
   byte trcap;			/* Transit capability? */
   byte marked;			/* Used in OSPF reconfigure */
   byte translate;		/* Translator state (TRANS_*), for NSSA ABR  */
@@ -850,6 +857,7 @@ static inline int oa_is_nssa(struct ospf_area *oa)
 
 #ifdef OSPFv3
 void schedule_link_lsa(struct ospf_iface *ifa);
+void schedule_ac_lsa(struct ospf_area *oa);
 #else
 static inline void schedule_link_lsa(struct ospf_iface *ifa UNUSED) {}
 #endif

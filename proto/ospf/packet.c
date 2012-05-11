@@ -99,7 +99,7 @@ ospf_pkt_finalize(struct ospf_iface *ifa, struct ospf_packet *pkt)
 	  ifa->csn_use = now;
 	}
 
-      /* We must have sufficient delay between sending a packet and increasing 
+      /* We must have sufficient delay between sending a packet and increasing
 	 CSN to prevent reordering of packets (in a network) with different CSNs */
       if ((now - ifa->csn_use) > 1)
 	ifa->csn++;
@@ -238,7 +238,7 @@ ospf_pkt_finalize(struct ospf_iface *ifa, struct ospf_packet *pkt)
 static int
 ospf_pkt_checkauth(struct ospf_neighbor *n, struct ospf_iface *ifa, struct ospf_packet *pkt, int size)
 { return 1; }
- 
+
 #endif
 
 
@@ -270,7 +270,7 @@ ospf_rx_hook(sock *sk, int size)
   struct proto_ospf *po = ifa->oa->po;
   // struct proto *p = &po->proto;
 
-  int src_local, dst_local UNUSED, dst_mcast; 
+  int src_local, dst_local UNUSED, dst_mcast;
   src_local = ipa_in_net(sk->faddr, ifa->addr->prefix, ifa->addr->pxlen);
   dst_local = ipa_equal(sk->laddr, ifa->addr->ip);
   dst_mcast = ipa_equal(sk->laddr, AllSPFRouters) || ipa_equal(sk->laddr, AllDRouters);
@@ -280,7 +280,7 @@ ospf_rx_hook(sock *sk, int size)
    * In OSPFv2, they might be for other ospf_ifaces (with different IP
    * prefix) on the same real iface, so we don't log it. We enforce
    * that (src_local || dst_local), therefore we are eliminating all
-   * such cases. 
+   * such cases.
    */
   if (dst_mcast && !src_local)
     return 1;
@@ -289,7 +289,7 @@ ospf_rx_hook(sock *sk, int size)
 
 #else /* OSPFv3 */
 
-  /* In OSPFv3, src_local and dst_local mean link-local. 
+  /* In OSPFv3, src_local and dst_local mean link-local.
    * RFC 5340 says that local (non-vlink) packets use
    * link-local src address, but does not enforce it. Strange.
    */
@@ -384,7 +384,7 @@ ospf_rx_hook(sock *sk, int size)
 
     WALK_LIST(iff, po->iface_list)
     {
-      if ((iff->type == OSPF_IT_VLINK) && 
+      if ((iff->type == OSPF_IT_VLINK) &&
 	  (iff->voa == ifa->oa) &&
 #ifdef OSPFv3
 	  (iff->instance_id == ps->instance_id) &&
@@ -394,7 +394,7 @@ ospf_rx_hook(sock *sk, int size)
 	  /* Vlink should be UP */
 	  if (iff->state != OSPF_IS_PTP)
 	    return 1;
-	  
+
 	  ifa = iff;
 	  goto found;
 	}
@@ -449,7 +449,7 @@ ospf_rx_hook(sock *sk, int size)
     return 1;
   }
 
-  /* Dump packet 
+  /* Dump packet
      pu8=(u8 *)(sk->rbuf+5*4);
      for(i=0;i<ntohs(ps->length);i+=4)
      DBG("%s: received %u,%u,%u,%u\n",p->name, pu8[i+0], pu8[i+1], pu8[i+2],
@@ -460,23 +460,23 @@ ospf_rx_hook(sock *sk, int size)
   switch (ps->type)
   {
   case HELLO_P:
-    DBG("%s: Hello received.\n", p->name);
+    DBG("%s: Hello received.\n", po->proto.name);
     ospf_hello_receive(ps, ifa, n, sk->faddr);
     break;
   case DBDES_P:
-    DBG("%s: Database description received.\n", p->name);
+    DBG("%s: Database description received.\n", po->proto.name);
     ospf_dbdes_receive(ps, ifa, n);
     break;
   case LSREQ_P:
-    DBG("%s: Link state request received.\n", p->name);
+    DBG("%s: Link state request received.\n", po->proto.name);
     ospf_lsreq_receive(ps, ifa, n);
     break;
   case LSUPD_P:
-    DBG("%s: Link state update received.\n", p->name);
+    DBG("%s: Link state update received.\n", po->proto.name);
     ospf_lsupd_receive(ps, ifa, n);
     break;
   case LSACK_P:
-    DBG("%s: Link state ack received.\n", p->name);
+    DBG("%s: Link state ack received.\n", po->proto.name);
     ospf_lsack_receive(ps, ifa, n);
     break;
   default:

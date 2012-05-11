@@ -38,7 +38,7 @@
  * at most one &rip_connection.
  *
  * We are not going to honor requests for sending part of
- * routing table. That would need to turn split horizon off etc.  
+ * routing table. That would need to turn split horizon off etc.
  *
  * About triggered updates, RFC says: when a triggered update was sent,
  * don't send a new one for something between 1 and 5 seconds (and send one
@@ -112,7 +112,7 @@ rip_tx_prepare(struct proto *p, struct rip_block *b, struct rip_entry *e, struct
     b->nexthop = e->nexthop;
   else
     b->nexthop = IPA_NONE;
-  ipa_hton( b->nexthop );  
+  ipa_hton( b->nexthop );
   b->metric  = htonl( metric );
 #else
   b->pxlen = e->n.pxlen;
@@ -159,7 +159,7 @@ rip_tx( sock *s )
 #else
     maxi = 5; /* We need to have at least reserve of one at end of packet */
 #endif
-    
+
     FIB_ITERATE_START(&P->rtable, &c->iter, z) {
       struct rip_entry *e = (struct rip_entry *) z;
 
@@ -190,9 +190,9 @@ rip_tx( sock *s )
       i = sk_send( s, packetlen );
 
     DBG( "it wants more\n" );
-  
+
   } while (i>0);
-  
+
   if (i<0) rip_tx_err( s, i );
   DBG( "blocked\n" );
   return;
@@ -206,7 +206,7 @@ done:
   return;
 }
 
-/* 
+/*
  * rip_sendto - send whole routing table to selected destination
  * @rif: interface to use. Notice that we lock interface so that at
  * most one send to one interface is done.
@@ -224,7 +224,7 @@ rip_sendto( struct proto *p, ip_addr daddr, int dport, struct rip_interface *rif
   }
   c = mb_alloc( p->pool, sizeof( struct rip_connection ));
   rif->busy = c;
-  
+
   c->addr = daddr;
   c->proto = p;
   c->num = num++;
@@ -260,7 +260,7 @@ find_interface(struct proto *p, struct iface *what)
 /*
  * Input processing
  *
- * This part is responsible for any updates that come from network 
+ * This part is responsible for any updates that come from network
  */
 
 static void
@@ -306,7 +306,7 @@ advertise_entry( struct proto *p, struct rip_block *b, ip_addr whotoldme, struct
   pxlen = ipa_mklen(b->netmask);
 #else
   /* FIXME: next hop is in other packet for v6 */
-  A.gw = whotoldme; 
+  A.gw = whotoldme;
   pxlen = b->pxlen;
 #endif
   A.from = whotoldme;
@@ -329,7 +329,7 @@ advertise_entry( struct proto *p, struct rip_block *b, ip_addr whotoldme, struct
   }
   if (!rif)
     bug("Route packet using unknown interface? No.");
-    
+
   /* set to: interface of nexthop */
   a = rta_lookup(&A);
   if (pxlen==-1)  {
@@ -340,7 +340,7 @@ advertise_entry( struct proto *p, struct rip_block *b, ip_addr whotoldme, struct
   r = rte_get_temp(a);
 #ifndef IPV6
   r->u.rip.metric = ntohl(b->metric) + rif->metric;
-#else  
+#else
   r->u.rip.metric = b->metric + rif->metric;
 #endif
 
@@ -406,7 +406,7 @@ rip_process_packet( struct proto *p, struct rip_packet *packet, int num, ip_addr
   }
 
   switch( packet->heading.command ) {
-  case RIPCMD_REQUEST: DBG( "Asked to send my routing table\n" ); 
+  case RIPCMD_REQUEST: DBG( "Asked to send my routing table\n" );
 	  if (P_CF->honor == HO_NEVER)
 	    BAD( "They asked me to send routing table, but I was told not to do it" );
 
@@ -414,7 +414,7 @@ rip_process_packet( struct proto *p, struct rip_packet *packet, int num, ip_addr
 	    BAD( "They asked me to send routing table, but he is not my neighbor" );
     	  rip_sendto( p, whotoldme, port, HEAD(P->interfaces) ); /* no broadcast */
           break;
-  case RIPCMD_RESPONSE: DBG( "*** Rtable from %I\n", whotoldme ); 
+  case RIPCMD_RESPONSE: DBG( "*** Rtable from %I\n", whotoldme );
           if (port != P_CF->port) {
 	    log( L_REMOTE "%s: %I send me routing info from port %d", p->name, whotoldme, port );
 	    return 1;
@@ -505,7 +505,7 @@ rip_rx(sock *s, int size)
 static void
 rip_dump_entry( struct rip_entry *e )
 {
-  debug( "%I told me %d/%d ago: to %I/%d go via %I, metric %d ", 
+  debug( "%I told me %d/%d ago: to %I/%d go via %I, metric %d ",
   e->whotoldme, e->updated-now, e->changed-now, e->n.prefix, e->n.pxlen, e->nexthop, e->metric );
   debug( "\n" );
 }
@@ -529,7 +529,7 @@ rip_timer(timer *t)
 
   CHK_MAGIC;
   DBG( "RIP: tick tock\n" );
-  
+
   WALK_LIST_DELSAFE( e, et, P->garbage ) {
     rte *rte;
     rte = SKIP_BACK( struct rte, u.rip.garbage, e );
@@ -597,7 +597,7 @@ rip_start(struct proto *p)
   P->timer = tm_new( p->pool );
   P->timer->data = p;
   P->timer->randomize = 5;
-  P->timer->recurrent = (P_CF->period / 6)+1; 
+  P->timer->recurrent = (P_CF->period / 6)+1;
   P->timer->hook = rip_timer;
   tm_start( P->timer, 5 );
   rif = new_iface(p, NULL, 0, NULL);	/* Initialize dummy interface */
@@ -749,7 +749,7 @@ new_iface(struct proto *p, struct iface *new, unsigned long flags, struct iface_
   }
 
   TRACE(D_EVENTS, "Listening on %s, port %d, mode %s (%I)", rif->iface ? rif->iface->name : "(dummy)", P_CF->port, rif->multicast ? "multicast" : "broadcast", rif->sock->daddr );
-  
+
   return rif;
 
  err:
@@ -861,7 +861,7 @@ rip_make_tmp_attrs(struct rte *rt, struct linpool *pool)
   return rip_gen_attrs(pool, rt->u.rip.metric, rt->u.rip.tag);
 }
 
-static void 
+static void
 rip_store_tmp_attrs(struct rte *rt, struct ea_list *attrs)
 {
   rt->u.rip.tag = ea_get_int(attrs, EA_RIP_TAG, 0);
@@ -870,7 +870,7 @@ rip_store_tmp_attrs(struct rte *rt, struct ea_list *attrs)
 
 /*
  * rip_rt_notify - core tells us about new route (possibly our
- * own), so store it into our data structures. 
+ * own), so store it into our data structures.
  */
 static void
 rip_rt_notify(struct proto *p, struct rtable *table UNUSED, struct network *net,
@@ -957,7 +957,9 @@ rip_rte_insert(net *net UNUSED, rte *rte)
 static void
 rip_rte_remove(net *net UNUSED, rte *rte)
 {
-  // struct proto *p = rte->attrs->proto;
+#ifdef LOCAL_DEBUG
+  struct proto *p = rte->attrs->proto;
+#endif
   CHK_MAGIC;
   DBG( "rip_rte_remove: %p\n", rte );
   rem_node( &rte->u.rip.garbage );
