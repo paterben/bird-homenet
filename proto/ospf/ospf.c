@@ -475,7 +475,7 @@ area_disp(struct ospf_area *oa)
 
 #ifdef OSPFv3
     /* Now try to originate AC LSAs */
-    if (po->homenet && oa->origac)
+    if (oa->origac)
       update_ac_lsa(oa);
 #endif
   }

@@ -1525,6 +1525,14 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
   return lsab_flush(po);
 }
 
+/**
+ * originate_ac_lsa - build new instance of Auto Configuration LSA
+ * @oa: ospf_area which this LSA is built to
+ *
+ * This function builds an AC LSA. This function is mostly called from
+ * area_disp(). Builds new LSA, increases sequence number (if old
+ * instance exists) and sets age of LSA to zero.
+ */
 void
 originate_ac_lsa(struct ospf_area *oa)
 {
