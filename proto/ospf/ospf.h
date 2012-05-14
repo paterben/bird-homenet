@@ -73,10 +73,13 @@ do { if ((p->debug & D_PACKETS) || OSPF_FORCE_DEBUG) \
 
 #define DEFAULT_OSPFTICK 1
 #define DEFAULT_RFC1583 0	/* compatibility with rfc1583 */
-#define DEFAULT_OSPF_HOMENET 0  /* OSPF homenet autoconfiguration off by default */
 #define DEFAULT_STUB_COST 1000
 #define DEFAULT_ECMP_LIMIT 16
 #define DEFAULT_TRANSINT 40
+
+#ifdef OSPFv3
+#define DEFAULT_OSPF_HOMENET 0  /* OSPF homenet autoconfiguration off by default */
+#endif
 
 
 struct ospf_config
@@ -84,7 +87,9 @@ struct ospf_config
   struct proto_config c;
   unsigned tick;
   byte rfc1583;
+#ifdef OSPFv3
   byte homenet;
+#endif
   byte abr;
   int ecmp;
   list area_list;		/* list of struct ospf_area_config */
@@ -558,7 +563,11 @@ struct ospf_lsa_prefix
   u32 rest[];
 };
 
-typedef u32 ospf_lsa_ac[];
+struct ospf_lsa_ac
+{
+  u32 useless;
+  //u32 rest[];
+};
 
 #define LSA_EXT_EBIT 0x4000000
 #define LSA_EXT_FBIT 0x2000000
@@ -756,6 +765,7 @@ struct ospf_area
   u32 options;			/* Optional features */
   byte origrt;			/* Rt lsa origination scheduled? */
   byte origac;                  /* AC lsa origination scheduled? */
+  int ac_tlvc;                  /* How many AC TLVs do I have? */
   byte trcap;			/* Transit capability? */
   byte marked;			/* Used in OSPF reconfigure */
   byte translate;		/* Translator state (TRANS_*), for NSSA ABR  */
@@ -782,7 +792,9 @@ struct proto_ospf
   int areano;			/* Number of area I belong to */
   struct fib rtf;		/* Routing table */
   byte rfc1583;			/* RFC1583 compatibility */
+#ifdef OSPFv3
   byte homenet;                 /* Is this a special autoconfiguring OSPF instance? */
+#endif
   byte ebit;			/* Did I originate any ext lsa? */
   byte ecmp;			/* Maximal number of nexthops in ECMP route, or 0 */
   struct ospf_area *backbone;	/* If exists */

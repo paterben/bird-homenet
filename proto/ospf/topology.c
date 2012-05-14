@@ -1511,18 +1511,17 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
   struct proto_ospf *po = oa->po;
   struct ospf_lsa_ac *lac;
   // struct top_hash_entry *en;
-  int tlvc, offset;
+  int offset;
+  int tlvc = oa->ac_tlvc;
 
-  ASSERT(po->lsab_used == 0);
-  lac = lsab_allocz(po, 0 /* ospf_lsa_ac has no fixed-length members */);
-  lac = NULL; /* buffer might be reallocated later */
+  lac = mb_alloc(po->proto.pool, 0 /* ospf_lsa_ac has no fixed-length members */
+		 + 1 /*nodes*/ * sizeof(u32)); /* FIXME change to nodes */
 
-  tlvc = 0;
-  offset = po->lsab_used;
-
-  lac = po->lsab;
-  *length = po->lsab_used + sizeof(struct ospf_lsa_header);
-  return lsab_flush(po);
+  lac->useless = 0x00000000;
+  *length = sizeof(struct ospf_lsa_header) + 0
+    + 1 /* nodes */ * sizeof(u32); /* FIXME change also */
+  DBG("length: %d",*length);
+  return lac;
 }
 
 /**
@@ -1559,7 +1558,7 @@ originate_ac_lsa(struct ospf_area *oa)
 void
 update_ac_lsa(struct ospf_area *oa)
 {
-struct proto_ospf *po = oa->po;
+// struct proto_ospf *po = oa->po;
 
   if ((oa->ac_lsa) && ((oa->ac_lsa->inst_t + MINLSINTERVAL)) > now)
     return;

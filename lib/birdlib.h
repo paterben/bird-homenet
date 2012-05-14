@@ -11,8 +11,8 @@
 
 #include "timer.h"
 
-#define LOCAL_DEBUG 1
-#define DEBUGGING 1
+//#define LOCAL_DEBUG 1
+//#define DEBUGGING 1
 
 /* Ugly structure offset handling macros */
 
