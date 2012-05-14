@@ -467,8 +467,8 @@ lsa_validate_prefix(struct ospf_lsa_header *lsa, struct ospf_lsa_prefix *body)
 static int
 lsa_validate_ac(struct ospf_lsa_header *lsa, struct ospf_lsa_prefix *body)
 {
-    DBG("lsa_validate_ac not implemented yet");
-    return 0;
+    log(L_WARN "lsa_validate_ac not implemented yet");
+    return 1;
 }
 #endif
 
