@@ -71,6 +71,19 @@ ospf_area_finish(void)
 }
 
 static void
+ospf_proto_start(int class)
+{
+  this_proto = proto_config_new(&proto_ospf, sizeof(struct ospf_config), class);
+  init_list(&OSPF_CFG->area_list);
+  init_list(&OSPF_CFG->vlink_list);
+  OSPF_CFG->rfc1583 = DEFAULT_RFC1583;
+  OSPF_CFG->tick = DEFAULT_OSPFTICK;
+#ifdef OSPFv3
+  OSPF_CFG->homenet = DEFAULT_OSPF_HOMENET;
+#endif
+}
+
+static void
 ospf_proto_finish(void)
 {
   struct ospf_config *cf = OSPF_CFG;
@@ -102,9 +115,21 @@ ospf_proto_finish(void)
   if (!cf->abr && !EMPTY_LIST(cf->vlink_list))
     cf_error( "Vlinks cannot be used on single area router");
 
+#ifdef OSPFv3
   /* This should probably be a warning instead of an error. */
   /* if(cf->homenet && !backbone)
     cf_error( "Homenet autoconfiguration requires area 0 to be configured"); */
+#endif
+}
+
+static void
+ospf_homenet_start(int b)
+{
+#ifdef OSPFv3
+  OSPF_CFG->homenet = b;
+#else /* OSPFv2 */
+  cf_error( "Homenet autoconfiguration can only be used with IPv6");
+#endif
 }
 
 static void
@@ -139,14 +164,7 @@ CF_GRAMMAR
 
 CF_ADDTO(proto, ospf_proto '}' { ospf_proto_finish(); } )
 
-ospf_proto_start: proto_start OSPF {
-     this_proto = proto_config_new(&proto_ospf, sizeof(struct ospf_config), $1);
-     init_list(&OSPF_CFG->area_list);
-     init_list(&OSPF_CFG->vlink_list);
-     OSPF_CFG->rfc1583 = DEFAULT_RFC1583;
-     OSPF_CFG->homenet = DEFAULT_OSPF_HOMENET;
-     OSPF_CFG->tick = DEFAULT_OSPFTICK;
-  }
+ospf_proto_start: proto_start OSPF { ospf_proto_start($1) }
  ;
 
 ospf_proto:
@@ -396,7 +414,7 @@ ospf_homenet:
 
 ospf_homenet_start: OSPFHOMENET bool
  {
-  OSPF_CFG->homenet = $2;
+  ospf_homenet_start($2);
  }
 ;
 

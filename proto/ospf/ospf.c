@@ -233,8 +233,10 @@ ospf_start(struct proto *p)
 
   po->router_id = proto_get_router_id(p->cf);
   po->rfc1583 = c->rfc1583;
+#ifdef OSPFv3
   po->homenet = c->homenet;
   /*po->homenet_autoconf_d = c->homenet_autoconf_d;*/
+#endif
   po->ebit = 0;
   po->ecmp = c->ecmp;
   po->tick = c->tick;
@@ -726,7 +728,9 @@ ospf_area_reconfigure(struct ospf_area *oa, struct ospf_area_config *nac)
 
   oa->marked = 0;
   schedule_rt_lsa(oa);
+#ifdef OSPFv3
   schedule_ac_lsa(oa);
+#endif
 }
 
 /**
@@ -753,8 +757,10 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
   if (po->rfc1583 != new->rfc1583)
     return 0;
 
+#ifdef OSPFv3
   if(po->homenet != new->homenet)
     return 0; /* FIXME Can we reconfigure gracefully? */
+#endif
 
   if (old->abr != new->abr)
     return 0;
@@ -860,7 +866,9 @@ ospf_sh(struct proto *p)
 
   cli_msg(-1014, "%s:", p->name);
   cli_msg(-1014, "RFC1583 compatibility: %s", (po->rfc1583 ? "enabled" : "disabled"));
+#ifdef OSPFv3
   cli_msg(-1014, "Homenet autoconfiguration: %s", (po->homenet ? "enabled" : "disabled"));
+#endif
   cli_msg(-1014, "RT scheduler tick: %d", po->tick);
   cli_msg(-1014, "Number of areas: %u", po->areano);
   cli_msg(-1014, "Number of LSAs in DB:\t%u", po->gr->hash_entries);

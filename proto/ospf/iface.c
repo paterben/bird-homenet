@@ -288,8 +288,12 @@ ospf_iface_chstate(struct ospf_iface *ifa, u8 state)
     ospf_iface_down(ifa);
 
   schedule_rt_lsa(ifa->oa);
+
+#ifdef OSPFv3
   if(po->homenet)
     schedule_ac_lsa(ifa->oa);
+#endif
+
   // FIXME flushling of link LSA
 }
 
