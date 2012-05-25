@@ -1384,6 +1384,18 @@ prefix_advance(u32 *buf)
   return buf + IPV6_PREFIX_WORDS(pxl);
 }
 
+/**
+ * add_prefix - adds a prefix to the lsa buffer
+ * @po: the proto_ospf the lsa buffer belongs to
+ * @px: a pointer to the prefix to add
+ * @offset: the offset to the start of the first prefix in the lsab
+ * @pxc: a pointer to the number of prefixes in the lsab
+ *
+ * This function assumes all prefixes in the lsab are different.
+ * If the new prefix being added is not in the lsab, it is copied and
+ * appended to the end of the lsab. Otherwise, the prefix options
+ * are logically OR'ed together.
+ */
 /* FIXME eliminate items with LA bit set? see 4.4.3.9 */
 static void
 add_prefix(struct proto_ospf *po, u32 *px, int offset, int *pxc)
@@ -1423,7 +1435,23 @@ add_link_lsa(struct proto_ospf *po, struct top_hash_entry *en, int offset, int *
     }
 }
 
-
+static void
+add_rhwf_tlv(struct proto_ospf *po, int offset)
+{
+  struct ospf_lsa_ac_tlv_rhwf *rhwf = lsab_offset(po, offset);
+  rhwf = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_rhwf) + sizeof(po->rhwf));
+  rhwf->type = LSA_AC_TLV_T_RHWF;
+  rhwf->length = sizeof(po->rhwf);
+  rhwf->value[0] = po->rhwf;
+}
+/*
+static void
+add_usp_tlv(struct ospf_area *oa, int offset)
+{
+  struct proto_ospf = oa->po;
+  struct ospf_lsa_ac_tlv_usp *usp = lsab_offset(oa->po, offset);
+  usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_usp));
+}*/
 
 static void *
 originate_prefix_net_lsa_body(struct ospf_iface *ifa, u16 *length)
@@ -1510,18 +1538,25 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
 {
   struct proto_ospf *po = oa->po;
   struct ospf_lsa_ac *lac;
-  // struct top_hash_entry *en;
-  int offset;
-  int tlvc = oa->ac_tlvc;
+  struct top_hash_entry *en;
+  struct ospf_iface *ifa;
+  int offset = 0;
 
-  lac = mb_alloc(po->proto.pool, 0 /* ospf_lsa_ac has no fixed-length members */
-		 + 1 /*nodes*/ * sizeof(u32)); /* FIXME change to nodes */
+  ASSERT(po->lsab_used == 0);
+  lac = lsab_allocz(po, sizeof(struct ospf_lsa_ac));
+  //lac = mb_alloc(po->proto.pool, 0 /* ospf_lsa_ac has no fixed-length members */
+  //		 + wordc * sizeof(u32));
+  offset = po->lsab_used;
+  add_rhwf_tlv(po, offset);
 
-  lac->useless = 0x00000000;
-  *length = sizeof(struct ospf_lsa_header) + 0
-    + 1 /* nodes */ * sizeof(u32); /* FIXME change also */
-  DBG("length: %d",*length);
-  return lac;
+  offset = po->lsab_used;
+  ASSERT(offset == sizeof(struct ospf_lsa_ac) + sizeof(struct ospf_lsa_ac_tlv_rhwf) + sizeof(u32));
+  //add_usp_tlv(po,offset);
+  /*WALK_LIST(ifa,oa->po->iface_list)
+  {
+    ifa->*/
+  *length = po->lsab_used + sizeof(struct ospf_lsa_header);
+  return lsab_flush(po);
 }
 
 /**
