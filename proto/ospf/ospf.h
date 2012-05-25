@@ -78,7 +78,7 @@ do { if ((p->debug & D_PACKETS) || OSPF_FORCE_DEBUG) \
 #define DEFAULT_TRANSINT 40
 
 #ifdef OSPFv3
-#define DEFAULT_OSPF_HOMENET 0  /* OSPF homenet autoconfiguration off by default */
+#define DEFAULT_OSPFAUTORID 0  /* OSPF automatic RID selection off by default */
 #endif
 
 
@@ -88,7 +88,7 @@ struct ospf_config
   unsigned tick;
   byte rfc1583;
 #ifdef OSPFv3
-  byte homenet;
+  byte autorid;
 #endif
   byte abr;
   int ecmp;
@@ -271,7 +271,7 @@ struct ospf_iface
   int origlink;				/* Schedule link LSA origination */
   struct top_hash_entry *link_lsa;	/* Originated link LSA */
   struct top_hash_entry *pxn_lsa;	/* Originated prefix LSA */
-  struct top_hash_entry *ac_lsa;        /* Originated AC LSA */
+  // struct top_hash_entry *ac_lsa;        /* Originated AC LSA */
 #endif
   int fadj;				/* Number of full adjacent neigh */
   list nbma_list;
@@ -565,9 +565,80 @@ struct ospf_lsa_prefix
 
 struct ospf_lsa_ac
 {
-  u32 useless;
-  //u32 rest[];
+  u32 tlvs[0]; /* hack, size can be any multiple of 32 bits */
 };
+
+/* Auto-Configuration LSA Type-Length-Value (TLV) types */
+#define LSA_AC_TLV_T_RHWF 1/* Router-Hardware-Fingerprint */
+#define LSA_AC_TLV_T_USP 2 /* Usable Prefix */
+ /* type TBD-BY-IANA-1 */
+#define LSA_AC_TLV_T_ASP 3 /* Assigned Prefix */
+ /* type TBD-BY-IANA-2 */
+
+struct ospf_lsa_ac_tlv /* Generic TLV */
+{
+# ifdef CPU_BIG_ENDIAN
+  u16 type;
+  u16 length;
+# else
+  u16 length;
+  u16 type;
+# endif
+  u32 value[];
+};
+
+struct ospf_lsa_ac_tlv_rhwf /* Router-Hardware-Fingerprint TLV */
+{
+# ifdef CPU_BIG_ENDIAN
+  u16 type;
+  u16 length;
+# else
+  u16 length;
+  u16 type;
+# endif
+  u32 value[];
+};
+
+struct ospf_lsa_ac_tlv_usp /* Usable Prefix TLV */
+{
+# ifdef CPU_BIG_ENDIAN
+  u16 type;
+  u16 length;
+  u8 pxlen;
+  u8 reserved8;
+  u16 reserved16;
+# else
+  u16 length;
+  u16 type;
+  u16 reserved16;
+  u8 reserved8;
+  u8 pxlen;
+# endif
+  u32 prefix[];
+};
+
+struct ospf_lsa_ac_tlv_asp /* Assigned Prefix TLV */
+{
+# ifdef CPU_BIG_ENDIAN
+  u16 type;
+  u16 length;
+# else
+  u16 length;
+  u16 type;
+# endif
+  u32 id;
+# ifdef CPU_BIG_ENDIAN
+  u8 pxlen;
+  u8 reserved8;
+  u16 reserved16;
+#else
+  u16 reserved16;
+  u8 reserved8;
+  u8 pxlen;
+#endif
+  u32 prefix[];
+};
+
 
 #define LSA_EXT_EBIT 0x4000000
 #define LSA_EXT_FBIT 0x2000000
@@ -577,7 +648,7 @@ struct ospf_lsa_ac
 #define ntoht(x) ntohs(x)
 #define htont(x) htons(x)
 
-#endif
+#endif /* OSPFv3 */
 
 #define METRIC_MASK  0x00FFFFFF
 #define OPTIONS_MASK 0x00FFFFFF
@@ -764,8 +835,14 @@ struct ospf_area
   struct fib enet_fib;		/* External networks for NSSAs */
   u32 options;			/* Optional features */
   byte origrt;			/* Rt lsa origination scheduled? */
+# ifdef OSPFv3
   byte origac;                  /* AC lsa origination scheduled? */
-  int ac_tlvc;                  /* How many AC TLVs do I have? */
+  list usable_prefix_list;      /* List of prefix pools from which it is possible to assign
+                                   prefixes to interfaces */
+  list assigned_prefix_list;    /* List of prefixes that have been
+                                   assigned to an interface in the OSPF network */
+  // int ac_tlvc;                  /* How many AC TLVs do I have? */
+# endif
   byte trcap;			/* Transit capability? */
   byte marked;			/* Used in OSPF reconfigure */
   byte translate;		/* Translator state (TRANS_*), for NSSA ABR  */
@@ -793,7 +870,7 @@ struct proto_ospf
   struct fib rtf;		/* Routing table */
   byte rfc1583;			/* RFC1583 compatibility */
 #ifdef OSPFv3
-  byte homenet;                 /* Is this a special autoconfiguring OSPF instance? */
+  byte autorid;                 /* Is automatic RID selection enabled? */
 #endif
   byte ebit;			/* Did I originate any ext lsa? */
   byte ecmp;			/* Maximal number of nexthops in ECMP route, or 0 */
@@ -802,6 +879,7 @@ struct proto_ospf
   int lsab_size, lsab_used;
   linpool *nhpool;		/* Linpool used for next hops computed in SPF */
   u32 router_id;
+  u32 rhwf;                     /* Unique hash based on hardware attributes */
   /*struct ospf_iface_patt *homenet_autoconf_d;*/
     /* Default interface configuration for homenet autoconf.
        This will be applied to all interfaces not otherwise
@@ -854,6 +932,7 @@ void ospf_store_tmp_attrs(struct rte *rt, struct ea_list *attrs);
 void schedule_rt_lsa(struct ospf_area *oa);
 void schedule_rtcalc(struct proto_ospf *po);
 void schedule_net_lsa(struct ospf_iface *ifa);
+static u32 ospf_get_rhwf(void);
 
 struct ospf_area *ospf_find_area(struct proto_ospf *po, u32 aid);
 static inline struct ospf_area *ospf_main_area(struct proto_ospf *po)

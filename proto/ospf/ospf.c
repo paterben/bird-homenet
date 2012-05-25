@@ -161,6 +161,11 @@ ospf_area_add(struct proto_ospf *po, struct ospf_area_config *ac, int reconf)
   fib_init(&oa->rtr, p->pool, sizeof(ort), 0, ospf_rt_initort);
   add_area_nets(oa, ac);
 
+#ifdef OSPFv3
+  init_list(&(oa->usable_prefix_list));
+  init_list(&(oa->assigned_prefix_list));
+#endif
+
   if (oa->areaid == 0)
     po->backbone = oa;
 
@@ -232,10 +237,10 @@ ospf_start(struct proto *p)
   struct ospf_area_config *ac;
 
   po->router_id = proto_get_router_id(p->cf);
+  po->rhwf = ospf_get_rhwf();
   po->rfc1583 = c->rfc1583;
 #ifdef OSPFv3
-  po->homenet = c->homenet;
-  /*po->homenet_autoconf_d = c->homenet_autoconf_d;*/
+  po->autorid = c->autorid;
 #endif
   po->ebit = 0;
   po->ecmp = c->ecmp;
@@ -623,6 +628,20 @@ ospf_rt_notify(struct proto *p, rtable *tbl UNUSED, net * n, rte * new, rte * ol
   originate_ext_lsa(oa, fn, EXT_EXPORT, metric, gw, tag, 1);
 }
 
+/**
+ * ospf_get_rhwf - Compute router hardware fingerprint.
+ *
+ * This function computes and returns a pseudo-unique hash
+ * value based on hardware attributes.
+ * The value is used in OSPF AC LSAs to be able to detect Router
+ * ID collisions.
+ */
+static u32
+ospf_get_rhwf(void)
+{
+  return 0xABCDEF01;
+}
+
 static void
 ospf_get_status(struct proto *p, byte * buf)
 {
@@ -758,7 +777,7 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
     return 0;
 
 #ifdef OSPFv3
-  if(po->homenet != new->homenet)
+  if(po->autorid != new->autorid)
     return 0; /* FIXME Can we reconfigure gracefully? */
 #endif
 
@@ -867,7 +886,7 @@ ospf_sh(struct proto *p)
   cli_msg(-1014, "%s:", p->name);
   cli_msg(-1014, "RFC1583 compatibility: %s", (po->rfc1583 ? "enabled" : "disabled"));
 #ifdef OSPFv3
-  cli_msg(-1014, "Homenet autoconfiguration: %s", (po->homenet ? "enabled" : "disabled"));
+  cli_msg(-1014, "Automatic RID selection: %s", (po->autorid ? "enabled" : "disabled"));
 #endif
   cli_msg(-1014, "RT scheduler tick: %d", po->tick);
   cli_msg(-1014, "Number of areas: %u", po->areano);

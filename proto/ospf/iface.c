@@ -290,7 +290,7 @@ ospf_iface_chstate(struct ospf_iface *ifa, u8 state)
   schedule_rt_lsa(ifa->oa);
 
 #ifdef OSPFv3
-  if(po->homenet)
+  if(po->autorid)
     schedule_ac_lsa(ifa->oa);
 #endif
 
