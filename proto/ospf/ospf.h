@@ -89,6 +89,7 @@ struct ospf_config
   byte rfc1583;
 #ifdef OSPFv3
   byte autorid;
+  list usable_prefix_list;      /* list of struct prefix_node */
 #endif
   byte abr;
   int ecmp;
@@ -98,6 +99,12 @@ struct ospf_config
     /* Default interface configuration for homenet autoconf.
        This will be applied to all interfaces not otherwise
        listed in configuration file, if homenet is true. */
+};
+
+struct prefix_node
+{
+  node n;
+  struct prefix px;
 };
 
 struct nbma_node
@@ -748,6 +755,11 @@ struct l_lsr_head
   struct ospf_lsreq_header lsh;
 };
 
+struct ospf_rhwf /* Router-Hardware-Fingerprint */
+{
+  u32 rhwf[8]; /* This is only for BIRD, a valid fingerprint can be
+                  any greater than 32 multiple of 4 bytes long */
+};
 
 struct ospf_neighbor
 {
@@ -838,10 +850,6 @@ struct ospf_area
   byte origrt;			/* Rt lsa origination scheduled? */
 # ifdef OSPFv3
   byte origac;                  /* AC lsa origination scheduled? */
-  list usable_prefix_list;      /* List of prefix pools from which it is possible to assign
-                                   prefixes to interfaces */
-  list assigned_prefix_list;    /* List of prefixes that have been
-                                   assigned to an interface in the OSPF network */
   // int ac_tlvc;                  /* How many AC TLVs do I have? */
 # endif
   byte trcap;			/* Transit capability? */
@@ -872,6 +880,10 @@ struct proto_ospf
   byte rfc1583;			/* RFC1583 compatibility */
 #ifdef OSPFv3
   byte autorid;                 /* Is automatic RID selection enabled? */
+  list usable_prefix_list;      /* List of prefix pools from which it is possible to assign
+                                   prefixes to interfaces */
+  list assigned_prefix_list;    /* List of prefixes that have been
+                                   assigned to an interface in the OSPF network */
 #endif
   byte ebit;			/* Did I originate any ext lsa? */
   byte ecmp;			/* Maximal number of nexthops in ECMP route, or 0 */
@@ -880,7 +892,7 @@ struct proto_ospf
   int lsab_size, lsab_used;
   linpool *nhpool;		/* Linpool used for next hops computed in SPF */
   u32 router_id;
-  u32 rhwf;                     /* Unique hash based on hardware attributes */
+  struct ospf_rhwf *rhwf;        /* Unique hash based on hardware attributes */
   /*struct ospf_iface_patt *homenet_autoconf_d;*/
     /* Default interface configuration for homenet autoconf.
        This will be applied to all interfaces not otherwise
@@ -934,7 +946,10 @@ void ospf_store_tmp_attrs(struct rte *rt, struct ea_list *attrs);
 void schedule_rt_lsa(struct ospf_area *oa);
 void schedule_rtcalc(struct proto_ospf *po);
 void schedule_net_lsa(struct ospf_iface *ifa);
-static u32 ospf_get_rhwf(void);
+static void ospf_set_rhwf(struct proto_ospf *po);
+#ifdef OSPFv3
+static void ospf_usp_add(struct proto_ospf *po, struct prefix_node *n);
+#endif
 
 struct ospf_area *ospf_find_area(struct proto_ospf *po, u32 aid);
 static inline struct ospf_area *ospf_main_area(struct proto_ospf *po)

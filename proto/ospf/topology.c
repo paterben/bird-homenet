@@ -1435,23 +1435,71 @@ add_link_lsa(struct proto_ospf *po, struct top_hash_entry *en, int offset, int *
     }
 }
 
+/**
+ * add_rhwf_tlv - Adds Router-Hardware-Fingerprint TLV to LSA buffer
+ * @po: The proto_ospf to which the LSA buffer belongs to
+ *
+ * This function is called by originate_ac_lsa_body.
+ */
 static void
-add_rhwf_tlv(struct proto_ospf *po, int offset)
+add_rhwf_tlv(struct proto_ospf *po)
 {
-  struct ospf_lsa_ac_tlv_rhwf *rhwf = lsab_offset(po, offset);
-  rhwf = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_rhwf) + sizeof(po->rhwf));
+  struct ospf_lsa_ac_tlv_rhwf *rhwf;
+  rhwf = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_rhwf) + sizeof(*(po->rhwf)));
   rhwf->type = LSA_AC_TLV_T_RHWF;
-  rhwf->length = sizeof(po->rhwf);
-  rhwf->value[0] = po->rhwf;
+  rhwf->length = sizeof(*(po->rhwf));
+  memcpy(rhwf->value, po->rhwf, sizeof(*(po->rhwf)));
 }
-/*
+
+/**
+ * add_usp_tlv - Adds Usable Prefix TLV to LSA buffer
+ * @po: The proto_ospf to which the LSA buffer belongs to
+ *
+ * This function is called by originate_ac_lsa_body.
+ */
 static void
-add_usp_tlv(struct ospf_area *oa, int offset)
+add_usp_tlv(struct proto_ospf *po)
 {
-  struct proto_ospf = oa->po;
-  struct ospf_lsa_ac_tlv_usp *usp = lsab_offset(oa->po, offset);
+  struct ospf_lsa_ac_tlv_usp *usp;
+  struct prefix *px;
+  int offset = po->lsab_used;
+
   usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_usp));
-}*/
+  usp->type = LSA_AC_TLV_T_USP;
+
+  // Add all prefixes from usable prefix list
+  WALK_LIST(px , po->usable_prefix_list)
+  {
+    lsa_put_prefix(po, px->addr, px->len, 0);
+  }
+
+  usp->length = po->lsab_used - offset;
+}
+
+/**
+ * add_asp_tlv - Adds Assigned Prefix TLV to LSA buffer
+ * @po: The proto_ospf to which the LSA buffer belongs to
+ *
+ * This function is called by originate_ac_lsa_body.
+ */
+static void
+add_asp_tlv(struct proto_ospf *po)
+{
+  struct ospf_lsa_ac_tlv_asp *asp;
+  struct prefix *px;
+  int offset = po->lsab_used;
+
+  asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_asp));
+  asp->type = LSA_AC_TLV_T_ASP;
+
+  // Add all prefixes from assigned prefix list
+  WALK_LIST(px , po->assigned_prefix_list)
+  {
+    lsa_put_prefix(po, px->addr, px->len, 0);
+  }
+
+  asp->length = po->lsab_used - offset;
+}
 
 static void *
 originate_prefix_net_lsa_body(struct ospf_iface *ifa, u16 *length)
@@ -1546,12 +1594,11 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
   lac = lsab_allocz(po, sizeof(struct ospf_lsa_ac));
   //lac = mb_alloc(po->proto.pool, 0 /* ospf_lsa_ac has no fixed-length members */
   //		 + wordc * sizeof(u32));
-  offset = po->lsab_used;
-  add_rhwf_tlv(po, offset);
+  add_rhwf_tlv(po);
 
   offset = po->lsab_used;
-  ASSERT(offset == sizeof(struct ospf_lsa_ac) + sizeof(struct ospf_lsa_ac_tlv_rhwf) + sizeof(u32));
-  //add_usp_tlv(po,offset);
+  ASSERT(offset == sizeof(struct ospf_lsa_ac) + sizeof(struct ospf_lsa_ac_tlv_rhwf) + sizeof(*(po->rhwf)));
+  //add_usp_tlv(po);
   /*WALK_LIST(ifa,oa->po->iface_list)
   {
     ifa->*/

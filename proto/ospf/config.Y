@@ -20,6 +20,7 @@ static struct nbma_node *this_nbma;
 static list *this_nets;
 static struct area_net_config *this_pref;
 static struct ospf_stubnet_config *this_stubnet;
+static struct prefix_node *this_usp;
 
 #ifdef OSPFv2
 static void
@@ -80,6 +81,7 @@ ospf_proto_start(int class)
   OSPF_CFG->tick = DEFAULT_OSPFTICK;
 #ifdef OSPFv3
   OSPF_CFG->autorid = DEFAULT_OSPFAUTORID;
+  init_list(&OSPF_CFG->usable_prefix_list);
 #endif
 }
 
@@ -160,7 +162,8 @@ CF_KEYWORDS(NONE, SIMPLE, AUTHENTICATION, STRICT, CRYPTOGRAPHIC)
 CF_KEYWORDS(ELIGIBLE, POLL, NETWORKS, HIDDEN, VIRTUAL, CHECK, LINK)
 CF_KEYWORDS(RX, BUFFER, LARGE, NORMAL, STUBNET, HIDDEN, SUMMARY, TAG, EXTERNAL)
 CF_KEYWORDS(WAIT, DELAY, LSADB, ECMP, LIMIT, WEIGHT, NSSA, TRANSLATOR, STABILITY)
-CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, AUTORID, INSTANCE, REAL)
+CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, INSTANCE, REAL)
+CF_KEYWORDS(AUTORID, USABLEPREFIX)
 
 %type <t> opttext
 %type <ld> lsadb_args
@@ -181,6 +184,7 @@ ospf_proto_item:
    proto_item
  | RFC1583COMPAT bool { OSPF_CFG->rfc1583 = $2; }
  | ospf_autorid
+ | ospf_usable_prefix
  | ECMP bool { OSPF_CFG->ecmp = $2 ? DEFAULT_ECMP_LIMIT : 0; }
  | ECMP bool LIMIT expr { OSPF_CFG->ecmp = $2 ? $4 : 0; if ($4 < 0) cf_error("ECMP limit cannot be negative"); }
  | TICK expr { OSPF_CFG->tick = $2; if($2<=0) cf_error("Tick must be greater than zero"); }
@@ -438,6 +442,23 @@ ospf_autorid_item:
   /* empty for the moment */
 ;
 
+ospf_usable_prefix: USABLEPREFIX '{' ospf_usable_prefix_list '}'
+;
+
+ospf_usable_prefix_list:
+   /* empty */
+ | ospf_usable_prefix_item ospf_usable_prefix_list
+ ;
+
+ospf_usable_prefix_item: prefix ';'
+{
+  this_usp = cfg_allocz(sizeof(struct prefix_node));
+  add_tail(&OSPF_CFG->usable_prefix_list, NODE this_usp);
+  this_usp->px.addr = $1.addr;
+  this_usp->px.len = $1.len;
+}
+;
+
 opttext:
     TEXT
  | /* empty */ { $$ = NULL; }
@@ -454,6 +475,9 @@ CF_CLI(SHOW OSPF, optsym, [<name>], [[Show information about OSPF protocol XXX]]
 
 CF_CLI(SHOW OSPF NEIGHBORS, optsym opttext, [<name>] [\"<interface>\"], [[Show information about OSPF neighbors]])
 { ospf_sh_neigh(proto_get_named($4, &proto_ospf), $5); };
+
+CF_CLI(SHOW OSPF USABLE, optsym, [<name>], [[Show information about usable prefixes]])
+{ ospf_sh_usp(proto_get_named($4, &proto_ospf)); };
 
 CF_CLI(SHOW OSPF INTERFACE, optsym opttext, [<name>] [\"<interface>\"], [[Show information about interface]])
 { ospf_sh_iface(proto_get_named($4, &proto_ospf), $5); };

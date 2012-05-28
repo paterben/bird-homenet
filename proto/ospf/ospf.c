@@ -161,11 +161,6 @@ ospf_area_add(struct proto_ospf *po, struct ospf_area_config *ac, int reconf)
   fib_init(&oa->rtr, p->pool, sizeof(ort), 0, ospf_rt_initort);
   add_area_nets(oa, ac);
 
-#ifdef OSPFv3
-  init_list(&(oa->usable_prefix_list));
-  init_list(&(oa->assigned_prefix_list));
-#endif
-
   if (oa->areaid == 0)
     po->backbone = oa;
 
@@ -235,12 +230,20 @@ ospf_start(struct proto *p)
   struct proto_ospf *po = (struct proto_ospf *) p;
   struct ospf_config *c = (struct ospf_config *) (p->cf);
   struct ospf_area_config *ac;
+  struct prefix_node *n;
 
   po->router_id = proto_get_router_id(p->cf);
-  po->rhwf = ospf_get_rhwf();
   po->rfc1583 = c->rfc1583;
 #ifdef OSPFv3
   po->autorid = c->autorid;
+  po->rhwf = mb_alloc(p->pool, sizeof(struct ospf_rhwf)); /* TODO get size of allocation from lower layer */
+  ospf_set_rhwf(po);
+  init_list(&(po->usable_prefix_list));
+  WALK_LIST(n,c->usable_prefix_list)
+  {
+    ospf_usp_add(po,n);
+  }
+  init_list(&(po->assigned_prefix_list));
 #endif
   po->ebit = 0;
   po->ecmp = c->ecmp;
@@ -629,17 +632,49 @@ ospf_rt_notify(struct proto *p, rtable *tbl UNUSED, net * n, rte * new, rte * ol
 }
 
 /**
- * ospf_get_rhwf - Compute router hardware fingerprint.
+ * ospf_set_rhwf - Compute router hardware fingerprint.
+ * @po: proto_ospf to store the value in
  *
- * This function computes and returns a pseudo-unique hash
- * value based on hardware attributes.
+ * This function computes a pseudo-unique hash value
+ * based on hardware attributes, and sets the corresponding
+ * field in @po.
  * The value is used in OSPF AC LSAs to be able to detect Router
  * ID collisions.
  */
-static u32
-ospf_get_rhwf(void)
+static void
+ospf_set_rhwf(struct proto_ospf *po)
 {
-  return 0xABCDEF01;
+  struct ospf_rhwf *fp = po->rhwf;
+  fp->rhwf[0] = 0x00000000;
+  fp->rhwf[1] = 0x11111111;
+  fp->rhwf[2] = 0x22222222;
+  fp->rhwf[3] = 0x33333333;
+  fp->rhwf[4] = 0x44444444;
+  fp->rhwf[5] = 0x55555555;
+  fp->rhwf[6] = 0x66666666;
+  fp->rhwf[7] = 0x77777777;
+}
+
+/**
+ * ospf_usp_add - Add usable prefix to protocol list
+ * @po: proto_ospf to store the value in
+ * @n: prefix to add
+ *
+ * Appends the prefix to the end of the protocol's
+ * usable_prefix_list.
+ */
+static void
+ospf_usp_add(struct proto_ospf *po, struct prefix_node *n)
+{
+  struct proto *p = &po->proto;
+  struct prefix_node *ncopy;
+
+  OSPF_TRACE(D_EVENTS, "Adding prefix %I/%d to list of usable prefixes", n->px.addr, n->px.len);
+
+  ncopy = mb_allocz(p->pool, sizeof(struct prefix_node));
+  add_tail(&po->usable_prefix_list, NODE ncopy);
+  ncopy->px.addr = n->px.addr;
+  ncopy->px.len = n->px.len;
 }
 
 static void
@@ -772,6 +807,7 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
   struct ospf_area *oa, *oax;
   struct ospf_iface *ifa, *ifx;
   struct ospf_iface_patt *ip;
+  struct prefix_node *n;
 
   if (po->rfc1583 != new->rfc1583)
     return 0;
@@ -779,6 +815,15 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
 #ifdef OSPFv3
   if(po->autorid != new->autorid)
     return 0; /* FIXME Can we reconfigure gracefully? */
+
+  /* Update usable prefix list */
+  /* FIXME we need to do much better: find the config differences,
+     possibly deassign addresses from interfaces */
+  init_list(&po->usable_prefix_list); /* empties the list */
+  WALK_LIST(n,new->usable_prefix_list)
+  {
+    ospf_usp_add(po,n);
+  }
 #endif
 
   if (old->abr != new->abr)
@@ -974,6 +1019,28 @@ ospf_sh_iface(struct proto *p, char *iff)
     if ((iff == NULL) || patmatch(iff, ifa->iface->name))
       ospf_iface_info(ifa);
   cli_msg(0, "");
+}
+
+void
+ospf_sh_usp(struct proto *p)
+{
+  struct proto_ospf *po = (struct proto_ospf *) p;
+  struct prefix_node *n;
+
+  if (p->proto_state != PS_UP)
+  {
+    cli_msg(-1020, "%s: is not up", p->name);
+    cli_msg(0, "");
+    return;
+  }
+
+  cli_msg(-1020, "%-39s%-s", "Prefix", "Prefix Length");
+  WALK_LIST(n,po->usable_prefix_list)
+  {
+    cli_msg(-1020, "%-1I/%-12d", n->px.addr, n->px.len);
+  }
+  cli_msg(0, "");
+  return;
 }
 
 /* lsa_compare_for_state() - Compare function for 'show ospf state'
