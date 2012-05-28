@@ -758,6 +758,20 @@ ospf_get_attr(eattr * a, byte * buf, int buflen UNUSED)
 }
 
 static void
+ospf_usp_reconfigure(struct proto_ospf *po, struct ospf_config *old, struct ospf_config *new)
+{
+  struct prefix_node *n;
+
+  /* FIXME we need to do much better: find the config differences,
+     possibly deassign addresses from interfaces */
+  init_list(&po->usable_prefix_list); /* empties the list */
+  WALK_LIST(n,new->usable_prefix_list)
+  {
+    ospf_usp_add(po,n);
+  }
+}
+
+static void
 ospf_area_reconfigure(struct ospf_area *oa, struct ospf_area_config *nac)
 {
   oa->ac = nac;
@@ -807,7 +821,6 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
   struct ospf_area *oa, *oax;
   struct ospf_iface *ifa, *ifx;
   struct ospf_iface_patt *ip;
-  struct prefix_node *n;
 
   if (po->rfc1583 != new->rfc1583)
     return 0;
@@ -817,13 +830,7 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
     return 0; /* FIXME Can we reconfigure gracefully? */
 
   /* Update usable prefix list */
-  /* FIXME we need to do much better: find the config differences,
-     possibly deassign addresses from interfaces */
-  init_list(&po->usable_prefix_list); /* empties the list */
-  WALK_LIST(n,new->usable_prefix_list)
-  {
-    ospf_usp_add(po,n);
-  }
+  ospf_usp_reconfigure(po, old, new);
 #endif
 
   if (old->abr != new->abr)
