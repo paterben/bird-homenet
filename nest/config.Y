@@ -49,6 +49,7 @@ CF_KEYWORDS(PASSWORD, FROM, PASSIVE, TO, ID, EVENTS, PACKETS, PROTOCOLS, INTERFA
 CF_KEYWORDS(PRIMARY, STATS, COUNT, FOR, COMMANDS, PREEXPORT, GENERATE, ROA, MAX, FLUSH)
 CF_KEYWORDS(LISTEN, BGP, V6ONLY, DUAL, ADDRESS, PORT, PASSWORDS, DESCRIPTION)
 CF_KEYWORDS(RELOAD, IN, OUT, MRTDUMP, MESSAGES, RESTRICT, MEMORY, IGP_METRIC)
+CF_KEYWORDS(RANDOM)
 
 CF_ENUM(T_ENUM_RTS, RTS_, DUMMY, STATIC, INHERIT, DEVICE, STATIC_DEVICE, REDIRECT,
 	RIP, OSPF, OSPF_IA, OSPF_EXT1, OSPF_EXT2, BGP, PIPE)
@@ -75,8 +76,14 @@ CF_GRAMMAR
 
 CF_ADDTO(conf, rtrid)
 
-rtrid: ROUTER ID idval ';' {
-   new_config->router_id = $3;
+rtrid:
+   ROUTER ID idval ';' {
+     new_config->router_id = $3;
+     new_config->rid_is_random = 0;
+   }
+ | ROUTER ID RANDOM ';' {
+     new_config->router_id = 0;
+     new_config->rid_is_random = 1;
    }
  ;
 
@@ -102,7 +109,7 @@ listen_opts:
  | listen_opts listen_opt
  ;
 
-listen_opt: 
+listen_opt:
    ADDRESS ipa { new_config->listen_bgp_addr = $2; }
  | PORT expr { new_config->listen_bgp_port = $2; }
  | V6ONLY { new_config->listen_bgp_flags = 0; }
@@ -181,7 +188,8 @@ proto_item:
  | IMPORT LIMIT limit_spec { this_proto->in_limit = $3; }
  | EXPORT LIMIT limit_spec { this_proto->out_limit = $3; }
  | TABLE rtable { this_proto->table = $2; }
- | ROUTER ID idval { this_proto->router_id = $3; }
+ | ROUTER ID idval { this_proto->router_id = $3; this_proto->rid_is_random = 0; }
+ | ROUTER ID RANDOM { this_proto->router_id = 0; this_proto->rid_is_random = 1; }
  | DESCRIPTION TEXT { this_proto->dsc = $2; }
  ;
 
@@ -247,7 +255,7 @@ iface_negate:
  ;
 
 iface_patt_node:
-   iface_patt_node_init iface_negate iface_patt_node_body 
+   iface_patt_node_init iface_negate iface_patt_node_body
  ;
 
 
@@ -332,7 +340,7 @@ password_list:
  | password_item
 ;
 
-password_items: 
+password_items:
     /* empty */
   | password_item ';' password_items
 ;
@@ -361,7 +369,7 @@ password_item_begin:
 ;
 
 password_item_params:
-   /* empty */ { } 
+   /* empty */ { }
  | GENERATE FROM datetime ';' password_item_params { this_p_item->genfrom = $3; }
  | GENERATE TO datetime ';' password_item_params { this_p_item->gento = $3; }
  | ACCEPT FROM datetime ';' password_item_params { this_p_item->accfrom = $3; }
@@ -534,7 +542,7 @@ sym_args:
 
 
 roa_table_arg:
-   /* empty */ { 
+   /* empty */ {
      if (roa_table_default == NULL)
        cf_error("No ROA table defined");
      $$ = roa_table_default;

@@ -80,7 +80,7 @@ ospf_proto_start(int class)
   OSPF_CFG->rfc1583 = DEFAULT_RFC1583;
   OSPF_CFG->tick = DEFAULT_OSPFTICK;
 #ifdef OSPFv3
-  OSPF_CFG->autorid = DEFAULT_OSPFAUTORID;
+  OSPF_CFG->dridd = DEFAULT_OSPFDRIDD;
   init_list(&OSPF_CFG->usable_prefix_list);
 #endif
 }
@@ -120,17 +120,17 @@ ospf_proto_finish(void)
 }
 
 static void
-ospf_autorid_start(int b)
+ospf_dridd_start(int b)
 {
 #ifdef OSPFv3
-  OSPF_CFG->autorid = b;
+  OSPF_CFG->dridd = b;
 #else /* OSPFv2 */
-  cf_error( "Automatic Router ID selection can only be used with IPv6");
+  cf_error( "Duplicate Router ID detection can only be used with IPv6");
 #endif
 }
 
 static void
-ospf_autorid_finish(void)
+ospf_dridd_finish(void)
 {
   /* FIXME tests needed? */
 }
@@ -163,7 +163,7 @@ CF_KEYWORDS(ELIGIBLE, POLL, NETWORKS, HIDDEN, VIRTUAL, CHECK, LINK)
 CF_KEYWORDS(RX, BUFFER, LARGE, NORMAL, STUBNET, HIDDEN, SUMMARY, TAG, EXTERNAL)
 CF_KEYWORDS(WAIT, DELAY, LSADB, ECMP, LIMIT, WEIGHT, NSSA, TRANSLATOR, STABILITY)
 CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, INSTANCE, REAL)
-CF_KEYWORDS(AUTORID, USABLEPREFIX)
+CF_KEYWORDS(DUPLICATE, RID, DETECTION, USABLEPREFIX)
 
 %type <t> opttext
 %type <ld> lsadb_args
@@ -183,7 +183,7 @@ ospf_proto:
 ospf_proto_item:
    proto_item
  | RFC1583COMPAT bool { OSPF_CFG->rfc1583 = $2; }
- | ospf_autorid
+ | ospf_dridd
  | ospf_usable_prefix
  | ECMP bool { OSPF_CFG->ecmp = $2 ? DEFAULT_ECMP_LIMIT : 0; }
  | ECMP bool LIMIT expr { OSPF_CFG->ecmp = $2 ? $4 : 0; if ($4 < 0) cf_error("ECMP limit cannot be negative"); }
@@ -422,23 +422,23 @@ ospf_iface:
   ospf_iface_start iface_patt_list ospf_instance_id ospf_iface_opt_list { ospf_iface_finish(); }
  ;
 
-ospf_autorid:
-   ospf_autorid_start '{' ospf_autorid_opts '}' { ospf_autorid_finish(); }
- | ospf_autorid_start
+ospf_dridd:
+   ospf_dridd_start '{' ospf_dridd_opts '}' { ospf_dridd_finish(); }
+ | ospf_dridd_start
  ;
 
-ospf_autorid_start: AUTORID bool
+ospf_dridd_start: DUPLICATE RID DETECTION bool
  {
-  ospf_autorid_start($2);
+  ospf_dridd_start($4);
  }
 ;
 
-ospf_autorid_opts:
+ospf_dridd_opts:
    /* empty */
- | ospf_autorid_opts ospf_autorid_item ';'
+ | ospf_dridd_opts ospf_dridd_item ';'
  ;
 
-ospf_autorid_item:
+ospf_dridd_item:
   /* empty for the moment */
 ;
 

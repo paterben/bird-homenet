@@ -108,6 +108,10 @@ static void ospf_rt_notify(struct proto *p, struct rtable *table UNUSED, net * n
 static int ospf_rte_better(struct rte *new, struct rte *old);
 static int ospf_rte_same(struct rte *new, struct rte *old);
 static void ospf_disp(timer *timer);
+static void ospf_set_rhwf(struct proto_ospf *po);
+#ifdef OSPFv3
+static void ospf_usp_add(struct proto_ospf *po, struct prefix_node *n);
+#endif
 
 static void
 ospf_area_initfib(struct fib_node *fn)
@@ -232,10 +236,22 @@ ospf_start(struct proto *p)
   struct ospf_area_config *ac;
   struct prefix_node *n;
 
-  po->router_id = proto_get_router_id(p->cf);
+  /* initialize RID */
+  po->rid_is_random = proto_get_rid_is_random(p->cf);
+  if(po->rid_is_random)
+  {
+    do {
+      po->router_id = random_u32();
+    } while (po->router_id == 0);
+  }
+  else
+    po->router_id = proto_get_router_id(p->cf);
+
   po->rfc1583 = c->rfc1583;
 #ifdef OSPFv3
-  po->autorid = c->autorid;
+  po->dridd = c->dridd;
+  if(!po->dridd && po->rid_is_random)
+    log(L_WARN "%s: Duplicate RID detection should be enabled when using a randomly generated RID", p->name);
   po->rhwf = mb_alloc(p->pool, sizeof(struct ospf_rhwf)); /* TODO get size of allocation from lower layer */
   ospf_set_rhwf(po);
   init_list(&(po->usable_prefix_list));
@@ -826,7 +842,7 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
     return 0;
 
 #ifdef OSPFv3
-  if(po->autorid != new->autorid)
+  if(po->dridd != new->dridd)
     return 0; /* FIXME Can we reconfigure gracefully? */
 
   /* Update usable prefix list */
@@ -938,7 +954,7 @@ ospf_sh(struct proto *p)
   cli_msg(-1014, "%s:", p->name);
   cli_msg(-1014, "RFC1583 compatibility: %s", (po->rfc1583 ? "enabled" : "disabled"));
 #ifdef OSPFv3
-  cli_msg(-1014, "Automatic RID selection: %s", (po->autorid ? "enabled" : "disabled"));
+  cli_msg(-1014, "Duplicate RID detection: %s", (po->dridd ? "enabled" : "disabled"));
 #endif
   cli_msg(-1014, "RT scheduler tick: %d", po->tick);
   cli_msg(-1014, "Number of areas: %u", po->areano);
@@ -1031,6 +1047,7 @@ ospf_sh_iface(struct proto *p, char *iff)
 void
 ospf_sh_usp(struct proto *p)
 {
+#ifdef OSPFv3
   struct proto_ospf *po = (struct proto_ospf *) p;
   struct prefix_node *n;
 
@@ -1048,6 +1065,11 @@ ospf_sh_usp(struct proto *p)
   }
   cli_msg(0, "");
   return;
+#else /* OSPFv2 */
+  cli_msg(-1020, "Command only available for OSPFv3");
+  cli_msg(0, "");
+  return;
+#endif
 }
 
 /* lsa_compare_for_state() - Compare function for 'show ospf state'

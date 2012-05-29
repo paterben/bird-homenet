@@ -283,7 +283,7 @@ proto_copy_config(struct proto_config *dest, struct proto_config *src)
 
   DBG("Copying configuration from %s to %s\n", src->name, dest->name);
 
-  /* 
+  /*
    * Copy struct proto_config here. Keep original node, class and name.
    * protocol-specific config copy is handled by protocol copy_config() hook
    */
@@ -383,7 +383,8 @@ proto_reconfigure(struct proto *p, struct proto_config *oc, struct proto_config 
   if ((nc->protocol != oc->protocol) ||
       (nc->disabled != p->disabled) ||
       (nc->table->table != oc->table->table) ||
-      (proto_get_router_id(nc) != proto_get_router_id(oc)))
+      (proto_get_router_id(nc) != proto_get_router_id(oc)) ||
+       proto_get_rid_is_random(nc) != proto_get_rid_is_random(nc))
     return 0;
 
 
@@ -921,7 +922,7 @@ proto_schedule_down(struct proto *p, byte restart, byte code)
 
 /**
  * proto_request_feeding - request feeding routes to the protocol
- * @p: given protocol 
+ * @p: given protocol
  *
  * Sometimes it is needed to send again all routes to the
  * protocol. This is called feeding and can be requested by this
@@ -965,7 +966,7 @@ proto_limit_name(struct proto_limit *l)
  * proto_notify_limit: notify about limit hit and take appropriate action
  * @ah: announce hook
  * @l: limit being hit
- * @rt_count: the number of routes 
+ * @rt_count: the number of routes
  *
  * The function is called by the route processing core when limit @l
  * is breached. It activates the limit and tooks appropriate action
@@ -1093,7 +1094,7 @@ proto_state_name(struct proto *p)
 static void
 proto_show_stats(struct proto_stats *s)
 {
-  cli_msg(-1006, "  Routes:         %u imported, %u exported, %u preferred", 
+  cli_msg(-1006, "  Routes:         %u imported, %u exported, %u preferred",
 	  s->imp_routes, s->exp_routes, s->pref_routes);
   cli_msg(-1006, "  Route change stats:     received   rejected   filtered    ignored   accepted");
   cli_msg(-1006, "    Import updates:     %10u %10u %10u %10u %10u",
@@ -1161,6 +1162,8 @@ proto_cmd_show(struct proto *p, unsigned int verbose, int cnt)
 	cli_msg(-1006, "  Description:    %s", p->cf->dsc);
       if (p->cf->router_id)
 	cli_msg(-1006, "  Router ID:      %R", p->cf->router_id);
+      if(p->cf->rid_is_random)
+        cli_msg(-1006, "  Router ID was randomly generated");
 
       if (p->proto->show_proto_info)
 	p->proto->show_proto_info(p);
