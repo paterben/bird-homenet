@@ -1444,8 +1444,8 @@ add_link_lsa(struct proto_ospf *po, struct top_hash_entry *en, int offset, int *
 static void
 add_rhwf_tlv(struct proto_ospf *po)
 {
-  struct ospf_lsa_ac_tlv_rhwf *rhwf;
-  rhwf = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_rhwf) + sizeof(*(po->rhwf)));
+  struct ospf_lsa_ac_tlv *rhwf;
+  rhwf = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv) + sizeof(*(po->rhwf)));
   rhwf->type = LSA_AC_TLV_T_RHWF;
   rhwf->length = sizeof(*(po->rhwf));
   memcpy(rhwf->value, po->rhwf, sizeof(*(po->rhwf)));
@@ -1460,20 +1460,20 @@ add_rhwf_tlv(struct proto_ospf *po)
 static void
 add_usp_tlv(struct proto_ospf *po)
 {
-  struct ospf_lsa_ac_tlv_usp *usp;
-  struct prefix *px;
+  struct ospf_lsa_ac_tlv *usp;
+  struct prefix_node *n;
   int offset = po->lsab_used;
 
-  usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_usp));
+  usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
   usp->type = LSA_AC_TLV_T_USP;
 
   // Add all prefixes from usable prefix list
-  WALK_LIST(px , po->usable_prefix_list)
+  WALK_LIST(n, po->usable_prefix_list)
   {
-    lsa_put_prefix(po, px->addr, px->len, 0);
+    lsa_put_prefix(po, n->px.addr, n->px.len, 0);
   }
 
-  usp->length = po->lsab_used - offset;
+  usp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
 }
 
 /**
@@ -1485,11 +1485,11 @@ add_usp_tlv(struct proto_ospf *po)
 static void
 add_asp_tlv(struct proto_ospf *po)
 {
-  struct ospf_lsa_ac_tlv_asp *asp;
+  struct ospf_lsa_ac_tlv *asp;
   struct prefix *px;
   int offset = po->lsab_used;
 
-  asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_asp));
+  asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
   asp->type = LSA_AC_TLV_T_ASP;
 
   // Add all prefixes from assigned prefix list
@@ -1498,7 +1498,7 @@ add_asp_tlv(struct proto_ospf *po)
     lsa_put_prefix(po, px->addr, px->len, 0);
   }
 
-  asp->length = po->lsab_used - offset;
+  asp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv)- offset;
 }
 
 static void *
@@ -1591,14 +1591,15 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
   int offset = 0;
 
   ASSERT(po->lsab_used == 0);
-  lac = lsab_allocz(po, sizeof(struct ospf_lsa_ac));
-  //lac = mb_alloc(po->proto.pool, 0 /* ospf_lsa_ac has no fixed-length members */
-  //		 + wordc * sizeof(u32));
-  add_rhwf_tlv(po);
 
+  add_rhwf_tlv(po);
   offset = po->lsab_used;
-  ASSERT(offset == sizeof(struct ospf_lsa_ac) + sizeof(struct ospf_lsa_ac_tlv_rhwf) + sizeof(*(po->rhwf)));
-  //add_usp_tlv(po);
+  ASSERT(offset == sizeof(struct ospf_lsa_ac) + sizeof(struct ospf_lsa_ac_tlv) + sizeof(*(po->rhwf)));
+
+  add_usp_tlv(po);
+  offset = po->lsab_used;
+  //ASSERT...
+
   /*WALK_LIST(ifa,oa->po->iface_list)
   {
     ifa->*/

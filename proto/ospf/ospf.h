@@ -595,29 +595,13 @@ struct ospf_lsa_ac_tlv /* Generic TLV */
   u32 value[];
 };
 
-struct ospf_lsa_ac_tlv_rhwf /* Router-Hardware-Fingerprint TLV */
+struct ospf_lsa_ac_tlv_oneusp /* One Usable Prefix */
 {
 # ifdef CPU_BIG_ENDIAN
-  u16 type;
-  u16 length;
-# else
-  u16 length;
-  u16 type;
-# endif
-  u32 value[];
-};
-
-struct ospf_lsa_ac_tlv_usp /* Usable Prefix TLV */
-{
-# ifdef CPU_BIG_ENDIAN
-  u16 type;
-  u16 length;
   u8 pxlen;
   u8 reserved8;
   u16 reserved16;
 # else
-  u16 length;
-  u16 type;
   u16 reserved16;
   u8 reserved8;
   u8 pxlen;
@@ -625,15 +609,8 @@ struct ospf_lsa_ac_tlv_usp /* Usable Prefix TLV */
   u32 prefix[];
 };
 
-struct ospf_lsa_ac_tlv_asp /* Assigned Prefix TLV */
+struct ospf_lsa_ac_tlv_oneasp /* One Assigned Prefix */
 {
-# ifdef CPU_BIG_ENDIAN
-  u16 type;
-  u16 length;
-# else
-  u16 length;
-  u16 type;
-# endif
   u32 id;
 # ifdef CPU_BIG_ENDIAN
   u8 pxlen;
@@ -678,7 +655,14 @@ lsa_net_count(struct ospf_lsa_header *lsa)
 
 #ifdef OSPFv3
 
+/* If x is the prefix length in bits, computes the length
+   in bytes necessary to represent the prefix (including padding
+   to 32-bit multiple length) as:
+   length(1 byte) options(1 byte) reserved(2 bytes) prefix(variable) */
 #define IPV6_PREFIX_SPACE(x) ((((x) + 63) / 32) * 4)
+
+/* If x is the prefix length in bits, computes the number of
+   32-bit words necessary to represent the prefix */
 #define IPV6_PREFIX_WORDS(x) (((x) + 63) / 32)
 
 static inline u32 *
