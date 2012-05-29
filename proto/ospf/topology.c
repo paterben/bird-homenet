@@ -1452,28 +1452,28 @@ add_rhwf_tlv(struct proto_ospf *po)
 }
 
 /**
- * add_usp_tlv - Adds Usable Prefix TLV to LSA buffer
+ * add_usp_tlvs - Adds Usable Prefix TLVs to LSA buffer
  * @po: The proto_ospf to which the LSA buffer belongs to
  *
  * This function is called by originate_ac_lsa_body.
  */
 static void
-add_usp_tlv(struct proto_ospf *po)
+add_usp_tlvs(struct proto_ospf *po)
 {
   struct ospf_lsa_ac_tlv *usp;
   struct prefix_node *n;
-  int offset = po->lsab_used;
-
-  usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
-  usp->type = LSA_AC_TLV_T_USP;
+  int offset;
 
   // Add all prefixes from usable prefix list
   WALK_LIST(n, po->usable_prefix_list)
   {
+    offset = po->lsab_used;
+    usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
+    usp->type = LSA_AC_TLV_T_USP;
     lsa_put_prefix(po, n->px.addr, n->px.len, 0);
+    //usp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
+    usp->length = IPV6_PREFIX_SPACE_NOPAD(n->px.len);
   }
-
-  usp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
 }
 
 /**
@@ -1596,7 +1596,7 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
   offset = po->lsab_used;
   ASSERT(offset == sizeof(struct ospf_lsa_ac) + sizeof(struct ospf_lsa_ac_tlv) + sizeof(*(po->rhwf)));
 
-  add_usp_tlv(po);
+  add_usp_tlvs(po);
   offset = po->lsab_used;
   //ASSERT...
 
