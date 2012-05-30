@@ -466,6 +466,9 @@ schedule_prefix_assign(struct proto_ospf *po)
 {
   struct proto *p = &po->proto;
 
+  if (po->pxassign)
+    return;
+
   OSPF_TRACE(D_EVENTS, "Scheduling prefix assignment");
   po->pxassign = 1;
 }
