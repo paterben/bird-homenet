@@ -79,6 +79,7 @@ do { if ((p->debug & D_PACKETS) || OSPF_FORCE_DEBUG) \
 
 #ifdef OSPFv3
 #define DEFAULT_OSPFDRIDD 0  /* OSPF duplicate RID detection off by default */
+#define DEFAULT_OSPFPXASSIGNMENT 0 /* OSPF prefix assignment off by default */
 #endif
 
 
@@ -89,6 +90,7 @@ struct ospf_config
   byte rfc1583;
 #ifdef OSPFv3
   byte dridd;                   /* Is duplicate RID detection enabled? */
+  byte pxassignment;            /* Is prefix assignment enables? */
   list usable_prefix_list;      /* list of struct prefix_node */
 #endif
   byte abr;
@@ -240,6 +242,8 @@ struct ospf_iface
  /* IID 240(0xF0): unassigned by IANA */
   u8 instance_id;		/* Used to differentiate between more OSPF
 				   instances on one interface */
+  list assigned_prefix_list;    /* List of prefixes that have been assigned to this interface
+                                   from a usable prefix */
 #endif
 
   u8 type;			/* OSPF view of type */
@@ -667,8 +671,8 @@ lsa_net_count(struct ospf_lsa_header *lsa)
 
 #ifdef OSPFv3
 
-/* If x is the prefix length in bits, computes the length
-   in bytes necessary to represent the prefix (including padding
+/* If x is the prefix length in bits, computes the number of
+   bytes necessary to represent the prefix (including padding
    to 32-bit multiple length) as:
    length(1 byte) options(1 byte) reserved(2 bytes) prefix(variable) */
 #define IPV6_PREFIX_SPACE(x) ((((x) + 63) / 32) * 4)
@@ -676,6 +680,10 @@ lsa_net_count(struct ospf_lsa_header *lsa)
 /* If x is the prefix length in bits, computes the number of
    32-bit words necessary to represent the prefix */
 #define IPV6_PREFIX_WORDS(x) (((x) + 63) / 32)
+
+/* If x is the prefix length in bits, computes the number of
+   bytes necessary to represent the prefix, NOT INCLUDING padding */
+#define IPV6_PREFIX_SPACE_NOPAD(x) (4 + (((x) + 7) / 8))
 
 static inline u32 *
 lsa_get_ipv6_prefix(u32 *buf, ip_addr *addr, int *pxlen, u8 *pxopts, u16 *rest)
@@ -837,7 +845,6 @@ struct ospf_area
   u32 areaid;
   struct ospf_area_config *ac;	/* Related area config */
   struct top_hash_entry *rt;	/* My own router LSA */
-  struct top_hash_entry *ac_lsa;  /* Originated AC LSA */
   struct top_hash_entry *pxr_lsa; /* Originated prefix LSA */
   list cand;			/* List of candidates for RT calc. */
   struct fib net_fib;		/* Networks to advertise or not */
@@ -845,6 +852,7 @@ struct ospf_area
   u32 options;			/* Optional features */
   byte origrt;			/* Rt lsa origination scheduled? */
 # ifdef OSPFv3
+  struct top_hash_entry *ac_lsa;  /* Originated AC LSA */
   byte origac;                  /* AC lsa origination scheduled? */
   // int ac_tlvc;                  /* How many AC TLVs do I have? */
 # endif
@@ -876,6 +884,8 @@ struct proto_ospf
   byte rfc1583;			/* RFC1583 compatibility */
 #ifdef OSPFv3
   byte dridd;                   /* Is duplicate RID detection enabled? */
+  byte pxassignment;            /* Is prefix assignment enables? */
+  byte pxassign;                /* Prefix assignment scheduled? */
   list usable_prefix_list;      /* List of prefix pools from which it is possible to assign
                                    prefixes to interfaces */
   list assigned_prefix_list;    /* List of prefixes that have been
@@ -959,6 +969,7 @@ static inline int oa_is_nssa(struct ospf_area *oa)
 #ifdef OSPFv3
 void schedule_link_lsa(struct ospf_iface *ifa);
 void schedule_ac_lsa(struct ospf_area *oa);
+void schedule_prefix_assign(struct proto_ospf *po);
 #else
 static inline void schedule_link_lsa(struct ospf_iface *ifa UNUSED) {}
 #endif
@@ -999,5 +1010,9 @@ void ospf_sh_lsadb(struct lsadb_show_data *ld);
 #include "proto/ospf/lsupd.h"
 #include "proto/ospf/lsack.h"
 #include "proto/ospf/lsalib.h"
+
+#ifdef OSPFv3
+#include "proto/ospf/pxassign.h"
+#endif
 
 #endif /* _BIRD_OSPF_H_ */

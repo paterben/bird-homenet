@@ -301,7 +301,7 @@ ospf_iface_chstate(struct ospf_iface *ifa, u8 state)
   schedule_rt_lsa(ifa->oa);
 
 #ifdef OSPFv3
-  if(po->dridd) /* FIXME should be changed to po->dridd || po->pxdel */
+  if(po->dridd || po->pxassignment)
     schedule_ac_lsa(ifa->oa);
 #endif
 

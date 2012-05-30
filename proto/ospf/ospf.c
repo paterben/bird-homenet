@@ -250,6 +250,7 @@ ospf_start(struct proto *p)
   po->rfc1583 = c->rfc1583;
 #ifdef OSPFv3
   po->dridd = c->dridd;
+  po->pxassignment = c->pxassignment;
   if(!po->dridd && po->rid_is_random)
     log(L_WARN "%s: Duplicate RID detection should be enabled when using a randomly generated RID", p->name);
   po->rhwf = mb_alloc(p->pool, sizeof(struct ospf_rhwf)); /* TODO get size of allocation from lower layer */
@@ -452,6 +453,23 @@ schedule_ac_lsa(struct ospf_area *oa)
   OSPF_TRACE(D_EVENTS, "Scheduling AC-LSA origination for area %R", oa->areaid);
   oa->origac = 1;
 }
+
+/**
+ * schedule_prefix_assign - Schedule prefix assignment to be performed
+ * @oa: The area in which to perform prefix assignment
+ *
+ * This function tells OSPF to perform prefix assignment on next call of area_disp.
+ *
+ */
+void
+schedule_prefix_assign(struct proto_ospf *po)
+{
+  struct proto *p = &po->proto;
+
+  OSPF_TRACE(D_EVENTS, "Scheduling prefix assignment");
+  po->pxassign = 1;
+}
+
 #endif
 
 static int
@@ -474,8 +492,7 @@ ospf_reload_routes(struct proto *p)
  *
  * It invokes aging and when @ospf_area->origrt is set to 1, start
  * function for origination of router, network LSAs.
- * If this is an OSPF-HOMENET protocol instance, also originates
- * AC LSAs.
+ * Also originates AC LSAs if relevant.
  */
 void
 area_disp(struct ospf_area *oa)
@@ -498,13 +515,13 @@ area_disp(struct ospf_area *oa)
 
     if (ifa->orignet && (ifa->oa == oa))
       update_net_lsa(ifa);
-
-#ifdef OSPFv3
-    /* Now try to originate AC LSAs */
-    if (oa->origac)
-      update_ac_lsa(oa);
-#endif
   }
+#ifdef OSPFv3
+  /* Now try to originate AC LSAs */
+  if (oa->origac)
+    update_ac_lsa(oa);
+
+#endif
 }
 
 /**
@@ -527,9 +544,11 @@ ospf_disp(timer * timer)
   /* Calculate routing table */
   if (po->calcrt)
     ospf_rt_spf(po);
+
+  /* Perform prefix assignment if needed */
+  if(po->pxassignment && po->pxassign)
+    ospf_prefix_assign(po);
 }
-
-
 
 /**
  * ospf_import_control - accept or reject new route from nest's routing table
@@ -813,7 +832,8 @@ ospf_area_reconfigure(struct ospf_area *oa, struct ospf_area_config *nac)
   oa->marked = 0;
   schedule_rt_lsa(oa);
 #ifdef OSPFv3
-  schedule_ac_lsa(oa);
+  if(oa->po->dridd || oa->po->pxassignment)
+    schedule_ac_lsa(oa);
 #endif
 }
 

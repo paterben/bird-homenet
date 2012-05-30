@@ -81,6 +81,7 @@ ospf_proto_start(int class)
   OSPF_CFG->tick = DEFAULT_OSPFTICK;
 #ifdef OSPFv3
   OSPF_CFG->dridd = DEFAULT_OSPFDRIDD;
+  OSPF_CFG->pxassignment = DEFAULT_OSPFPXASSIGNMENT;
   init_list(&OSPF_CFG->usable_prefix_list);
 #endif
 }
@@ -117,6 +118,22 @@ ospf_proto_finish(void)
   if (!cf->abr && !EMPTY_LIST(cf->vlink_list))
     cf_error( "Vlinks cannot be used on single area router");
 
+}
+
+static void
+ospf_pxassignment_start(int b)
+{
+#ifdef OSPFv3
+  OSPF_CFG->pxassignment = b;
+#else /* OSPFv2 */
+  cf_error( "Prefix assignment can only be used with IPv6");
+#endif
+}
+
+static void
+ospf_pxassignment_finish(void)
+{
+  /* FIXME tests needed? */
 }
 
 static void
@@ -163,7 +180,7 @@ CF_KEYWORDS(ELIGIBLE, POLL, NETWORKS, HIDDEN, VIRTUAL, CHECK, LINK)
 CF_KEYWORDS(RX, BUFFER, LARGE, NORMAL, STUBNET, HIDDEN, SUMMARY, TAG, EXTERNAL)
 CF_KEYWORDS(WAIT, DELAY, LSADB, ECMP, LIMIT, WEIGHT, NSSA, TRANSLATOR, STABILITY)
 CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, INSTANCE, REAL)
-CF_KEYWORDS(DUPLICATE, RID, DETECTION, USABLEPREFIX)
+CF_KEYWORDS(DUPLICATE, RID, DETECTION, USABLEPREFIX, ASSIGNMENT)
 
 %type <t> opttext
 %type <ld> lsadb_args
@@ -184,6 +201,7 @@ ospf_proto_item:
    proto_item
  | RFC1583COMPAT bool { OSPF_CFG->rfc1583 = $2; }
  | ospf_dridd
+ | ospf_pxassignment
  | ospf_usable_prefix
  | ECMP bool { OSPF_CFG->ecmp = $2 ? DEFAULT_ECMP_LIMIT : 0; }
  | ECMP bool LIMIT expr { OSPF_CFG->ecmp = $2 ? $4 : 0; if ($4 < 0) cf_error("ECMP limit cannot be negative"); }
@@ -422,9 +440,29 @@ ospf_iface:
   ospf_iface_start iface_patt_list ospf_instance_id ospf_iface_opt_list { ospf_iface_finish(); }
  ;
 
+ospf_pxassignment:
+   ospf_pxassignment_start '{' ospf_pxassignment_opts '}' { ospf_pxassignment_finish(); }
+ | ospf_pxassignment_start { ospf_pxassignment_finish(); }
+ ;
+
+ospf_pxassignment_start: PREFIX ASSIGNMENT bool
+ {
+  ospf_pxassignment_start($3);
+ }
+;
+
+ospf_pxassignment_opts:
+   /* empty */
+ | ospf_pxassignment_opts ospf_pxassignment_item ';'
+ ;
+
+ospf_pxassignment_item:
+  /* empty for the moment */
+;
+
 ospf_dridd:
    ospf_dridd_start '{' ospf_dridd_opts '}' { ospf_dridd_finish(); }
- | ospf_dridd_start
+ | ospf_dridd_start { ospf_dridd_finish(); }
  ;
 
 ospf_dridd_start: DUPLICATE RID DETECTION bool

@@ -530,7 +530,7 @@ lsa_validate_ac(struct ospf_lsa_header *lsa, struct ospf_lsa_ac *body)
         default:
           break;
       }
-      offset += LSA_AC_TLV_SPACE(((struct ospf_lsa_ac_tlv *)tlv)->length);
+      offset += LSA_AC_TLV_SPACE(((struct ospf_lsa_ac_tlv *)(tlv + offset))->length);
     }
     while (offset <= bound);
 
@@ -628,7 +628,10 @@ lsa_install_new(struct proto_ospf *po, struct ospf_lsa_header *lsa, u32 domain, 
   en->ini_age = en->lsa.age;
 
   if (change)
+  {
     schedule_rtcalc(po);
+    schedule_prefix_assign(po);
+  }
 
   return en;
 }

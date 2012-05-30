@@ -1452,28 +1452,28 @@ add_rhwf_tlv(struct proto_ospf *po)
 }
 
 /**
- * add_usp_tlv - Adds Usable Prefix TLV to LSA buffer
+ * add_usp_tlvs - Adds Usable Prefix TLVs to LSA buffer
  * @po: The proto_ospf to which the LSA buffer belongs to
  *
  * This function is called by originate_ac_lsa_body.
  */
 static void
-add_usp_tlv(struct proto_ospf *po)
+add_usp_tlvs(struct proto_ospf *po)
 {
   struct ospf_lsa_ac_tlv *usp;
   struct prefix_node *n;
-  int offset = po->lsab_used;
-
-  usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
-  usp->type = LSA_AC_TLV_T_USP;
+  int offset;
 
   // Add all prefixes from usable prefix list
   WALK_LIST(n, po->usable_prefix_list)
   {
+    offset = po->lsab_used;
+    usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
+    usp->type = LSA_AC_TLV_T_USP;
     lsa_put_prefix(po, n->px.addr, n->px.len, 0);
+    //usp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
+    usp->length = IPV6_PREFIX_SPACE_NOPAD(n->px.len);
   }
-
-  usp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
 }
 
 /**
@@ -1585,7 +1585,7 @@ static void *
 originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
 {
   struct proto_ospf *po = oa->po;
-  struct ospf_lsa_ac *lac;
+  // struct ospf_lsa_ac *lac;
   struct top_hash_entry *en;
   struct ospf_iface *ifa;
   int offset = 0;
@@ -1596,7 +1596,7 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
   offset = po->lsab_used;
   ASSERT(offset == sizeof(struct ospf_lsa_ac_tlv) + sizeof(*(po->rhwf)));
 
-  add_usp_tlv(po);
+  add_usp_tlvs(po);
   offset = po->lsab_used;
   //ASSERT...
 
@@ -1697,17 +1697,19 @@ static inline unsigned
 ospf_top_hash(struct top_graph *f, u32 domain, u32 lsaid, u32 rtrid, u32 type)
 {
   /* In OSPFv2, we don't know Router ID when looking for network LSAs.
-     In OSPFv3, we don't know LSA ID when looking for router LSAs.
-     In both cases, there is (usually) just one (or small number)
-     appropriate LSA, so we just clear unknown part of key. */
+     In OSPFv3, we don't know LSA ID when looking for router LSAs,
+     and we don't know LSA ID or Router ID when looking for AC LSAs.
+     In both cases, for Router LSAs there is (usually) just one (or small number)
+     appropriate LSA, so we just clear unknown part of key.
+     For AC LSAs, we usually want to find them all anyway. */
 
   return (
 #ifdef OSPFv2
 	  ((type == LSA_T_NET) ? 0 : ospf_top_hash_u32(rtrid)) +
 	  ospf_top_hash_u32(lsaid) +
 #else /* OSPFv3 */
-	  ospf_top_hash_u32(rtrid) +
-	  ((type == LSA_T_RT) ? 0 : ospf_top_hash_u32(lsaid)) +
+	  ((type == LSA_T_AC) ? 0 : ospf_top_hash_u32(rtrid)) +
+	  ((type == LSA_T_RT || type == LSA_T_AC) ? 0 : ospf_top_hash_u32(lsaid)) +
 #endif
 	  type + domain) & f->hash_mask;
 
@@ -1850,6 +1852,29 @@ ospf_hash_find_net(struct top_graph *f, u32 domain, u32 lsa)
 
 
 #ifdef OSPFv3
+
+/* AC LSA finding functions are shamelessly copied from the router LSA ones */
+static inline struct top_hash_entry *
+find_matching_ac_lsa(struct top_hash_entry *e, u32 domain)
+{
+  while (e && (e->lsa.type != LSA_T_AC || e->domain != domain))
+    e = e->next;
+  return e;
+}
+
+struct top_hash_entry *
+ospf_hash_find_ac_lsa_first(struct top_graph *f, u32 domain)
+{
+  struct top_hash_entry *e;
+  e = f->hash_table[ospf_top_hash(f, domain, 0, 0, LSA_T_AC)];
+  return find_matching_ac_lsa(e, domain);
+}
+
+struct top_hash_entry *
+ospf_hash_find_ac_lsa_next(struct top_hash_entry *e)
+{
+  return find_matching_ac_lsa(e->next, e->domain);
+}
 
 /* In OSPFv3, usually we don't know LSA ID when looking for router
    LSAs. We return matching LSA with smallest LSA ID. */
