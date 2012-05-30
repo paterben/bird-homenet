@@ -465,13 +465,78 @@ lsa_validate_prefix(struct ospf_lsa_header *lsa, struct ospf_lsa_prefix *body)
 }
 
 static int
-lsa_validate_ac(struct ospf_lsa_header *lsa, struct ospf_lsa_prefix *body)
+lsa_validate_ac_tlv_rhwf(u8 *rhwf)
 {
-    log(L_WARN "lsa_validate_ac not implemented yet");
+  struct ospf_lsa_ac_tlv *tlv = (struct ospf_lsa_ac_tlv *) rhwf;
+
+  return tlv->length >= 32; /* Only constraint on Router-Hardware-Fingerprint TLV
+                               is that the Value portion be 32 bytes long or more */
+}
+
+static int
+lsa_validate_ac_tlv_usp(u8 *rhwf)
+{
+  struct ospf_lsa_ac_tlv_v_usp *tlv = (struct ospf_lsa_ac_tlv_v_usp *) (rhwf + sizeof(struct ospf_lsa_ac_tlv));
+
+  if(tlv->pxlen < 8 || tlv->pxlen > 64)
+    return 0;
+
+  /* FIXME other tests on prefix? */
+
+  return 1;
+}
+
+static int
+lsa_validate_ac_tlv_asp(u8 *rhwf)
+{
+  struct ospf_lsa_ac_tlv_v_asp *tlv = (struct ospf_lsa_ac_tlv_v_asp *) (rhwf + sizeof(struct ospf_lsa_ac_tlv));
+
+  if(tlv->pxlen != 64)
+    return 0;
+
+  /* FIXME other tests on prefix / interface ID? */
+
+  return 1;
+}
+
+static int
+lsa_validate_ac(struct ospf_lsa_header *lsa, struct ospf_lsa_ac *body)
+{
+    if (lsa->length < (HDRLEN + sizeof(struct ospf_lsa_ac)))
+      return 0;
+
+    unsigned int offset = 0;
+    unsigned int bound = lsa->length - HDRLEN - 4;
+    unsigned int size = lsa->length - HDRLEN;
+
+    u8 *tlv = (u8 *) body;
+    do {
+      if(((struct ospf_lsa_ac_tlv *)(tlv + offset))->length + offset > size)
+        return 0;
+      switch(((struct ospf_lsa_ac_tlv *)(tlv + offset))->type)
+      {
+        case LSA_AC_TLV_T_RHWF:
+          if(!lsa_validate_ac_tlv_rhwf(tlv + offset))
+            return 0;
+          break;
+        case LSA_AC_TLV_T_USP:
+          if(!lsa_validate_ac_tlv_usp(tlv + offset))
+            return 0;
+          break;
+        case LSA_AC_TLV_T_ASP:
+          if(!lsa_validate_ac_tlv_asp(tlv + offset))
+            return 0;
+          break;
+        default:
+          break;
+      }
+      offset += LSA_AC_TLV_SPACE(((struct ospf_lsa_ac_tlv *)tlv)->length);
+    }
+    while (offset <= bound);
+
     return 1;
 }
 #endif
-
 
 /**
  * lsa_validate - check whether given LSA is valid

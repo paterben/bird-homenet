@@ -571,9 +571,16 @@ struct ospf_lsa_prefix
   u32 rest[];
 };
 
-struct ospf_lsa_ac
+struct ospf_lsa_ac /* must contain at least one TLV */
 {
-  u32 tlvs[0]; /* hack, size can be any multiple of 32 bits */
+  # ifdef CPU_BIG_ENDIAN
+  u16 type;
+  u16 length;
+# else
+  u16 length;
+  u16 type;
+# endif
+  u32 rest[];
 };
 
 /* Auto-Configuration LSA Type-Length-Value (TLV) types */
@@ -582,6 +589,11 @@ struct ospf_lsa_ac
  /* type TBD-BY-IANA-1 */
 #define LSA_AC_TLV_T_ASP 3 /* Assigned Prefix */
  /* type TBD-BY-IANA-2 */
+
+/* If x is the length of the TLV as specified in its
+   Length field, returns the number of bytes used to
+   represent the TLV (including type, length + padding) */
+#define LSA_AC_TLV_SPACE(x) (4 + (((x + 3) / 4) * 4))
 
 struct ospf_lsa_ac_tlv /* Generic TLV */
 {
@@ -595,7 +607,7 @@ struct ospf_lsa_ac_tlv /* Generic TLV */
   u32 value[];
 };
 
-struct ospf_lsa_ac_tlv_oneusp /* One Usable Prefix */
+struct ospf_lsa_ac_tlv_v_usp /* One Usable Prefix */
 {
 # ifdef CPU_BIG_ENDIAN
   u8 pxlen;
@@ -609,7 +621,7 @@ struct ospf_lsa_ac_tlv_oneusp /* One Usable Prefix */
   u32 prefix[];
 };
 
-struct ospf_lsa_ac_tlv_oneasp /* One Assigned Prefix */
+struct ospf_lsa_ac_tlv_v_asp /* One Assigned Prefix */
 {
   u32 id;
 # ifdef CPU_BIG_ENDIAN
@@ -655,8 +667,8 @@ lsa_net_count(struct ospf_lsa_header *lsa)
 
 #ifdef OSPFv3
 
-/* If x is the prefix length in bits, computes the number of
-   bytes necessary to represent the prefix (including padding
+/* If x is the prefix length in bits, computes the length
+   in bytes necessary to represent the prefix (including padding
    to 32-bit multiple length) as:
    length(1 byte) options(1 byte) reserved(2 bytes) prefix(variable) */
 #define IPV6_PREFIX_SPACE(x) ((((x) + 63) / 32) * 4)
@@ -664,10 +676,6 @@ lsa_net_count(struct ospf_lsa_header *lsa)
 /* If x is the prefix length in bits, computes the number of
    32-bit words necessary to represent the prefix */
 #define IPV6_PREFIX_WORDS(x) (((x) + 63) / 32)
-
-/* If x is the prefix length in bits, computes the number of
-   bytes necessary to represent the prefix, NOT INCLUDING padding */
-#define IPV6_PREFIX_SPACE_NOPAD(x) (4 + (((x) + 7) / 8))
 
 static inline u32 *
 lsa_get_ipv6_prefix(u32 *buf, ip_addr *addr, int *pxlen, u8 *pxopts, u16 *rest)
@@ -871,8 +879,7 @@ struct proto_ospf
   list usable_prefix_list;      /* List of prefix pools from which it is possible to assign
                                    prefixes to interfaces */
   list assigned_prefix_list;    /* List of prefixes that have been
-                                   assigned to some interface in the OSPF network
-                                   from a usable prefix */
+                                   assigned to an interface in the OSPF network */
 #endif
   byte ebit;			/* Did I originate any ext lsa? */
   byte ecmp;			/* Maximal number of nexthops in ECMP route, or 0 */
@@ -926,8 +933,6 @@ struct ospf_iface_patt
 
 #ifdef OSPFv3
   u8 instance_id;
-  list assigned_prefix_list;    /* List of prefixes that have been assigned to this interface
-                                   from a usable prefix */
 #endif
 };
 
