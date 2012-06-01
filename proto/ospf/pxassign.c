@@ -65,6 +65,24 @@ find_next_tlv(struct ospf_lsa_ac *lsa, int *offset, unsigned int size, u8 type)
 }
 
 /**
+ * already_assigned - Check if an assignment exists for a usable prefix
+ * @usp: The current usable prefix to check (contains a pointer to current interface)
+ */
+int
+already_assigned(struct ospf_usp *usp)
+{
+  struct ospf_iface *ifa = usp->ifa;
+  struct ospf_asp *asp;
+
+  WALK_LIST(asp, ifa->asp_list)
+  {
+    if(net_in_net(asp->ip, asp->pxlen, usp->ip, usp->pxlen))
+      return 1;
+  }
+  return 0;
+}
+
+/**
  * ospf_pxassign_area - Run prefix assignment algorithm for
  * usable prefixes advertised by AC LSAs in a specific area.
  *
@@ -259,6 +277,11 @@ ospf_pxassign_resp(struct ospf_usp *usp)
       }
     } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
   }
+
+  /* 5.3.5a and three quarters */
+  /* FIXME this step doesn't exist in algorithm */
+  if(already_assigned(usp))
+    return;
 
   /* 5.3.5b */
   /* FIXME implement 5.3.5b */

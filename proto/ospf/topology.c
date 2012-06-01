@@ -1462,12 +1462,12 @@ add_usp_tlvs(struct proto_ospf *po)
 {
   struct ospf_lsa_ac_tlv *usp;
   struct prefix_node *n;
-  int offset;
+  //int offset;
 
   // Add all prefixes from usable prefix list
   WALK_LIST(n, po->usp_list)
   {
-    offset = po->lsab_used;
+    //offset = po->lsab_used;
     usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
     usp->type = LSA_AC_TLV_T_USP;
     lsa_put_prefix(po, n->px.addr, n->px.len, 0);
@@ -1477,28 +1477,33 @@ add_usp_tlvs(struct proto_ospf *po)
 }
 
 /**
- * add_asp_tlv - Adds Assigned Prefix TLV to LSA buffer
+ * add_asp_tlv - Adds Assigned Prefix TLVs to LSA buffer
  * @po: The proto_ospf to which the LSA buffer belongs to
  *
  * This function is called by originate_ac_lsa_body.
  */
 static void
-add_asp_tlv(struct proto_ospf *po)
+add_asp_tlvs(struct proto_ospf *po)
 {
   struct ospf_lsa_ac_tlv *asp;
-  struct prefix *px;
-  int offset = po->lsab_used;
+  struct ospf_iface *ifa;
+  struct ospf_asp *n;
+  //int offset;
 
-  asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
-  asp->type = LSA_AC_TLV_T_ASP;
-
-  // Add all prefixes from assigned prefix list
-  WALK_LIST(px , po->asp_list)
+    // Add all prefixes from asp_lists of all interfaces
+  WALK_LIST(ifa, po->iface_list)
   {
-    lsa_put_prefix(po, px->addr, px->len, 0);
+    WALK_LIST(n, ifa->asp_list)
+    {
+      //offset = po->lsab_used;
+      asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
+      asp->type = LSA_AC_TLV_T_ASP;
+      put_u32(lsab_alloc(po, sizeof(u32)), ifa->iface->index);
+      lsa_put_prefix(po, n->ip, n->pxlen, 0);
+      //asp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
+      asp->length = IPV6_PREFIX_SPACE_NOPAD(n->pxlen) + sizeof(u32);
+    }
   }
-
-  asp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv)- offset;
 }
 
 static void *
@@ -1586,8 +1591,8 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
 {
   struct proto_ospf *po = oa->po;
   // struct ospf_lsa_ac *lac;
-  struct top_hash_entry *en;
-  struct ospf_iface *ifa;
+  //struct top_hash_entry *en;
+  //struct ospf_iface *ifa;
   int offset = 0;
 
   ASSERT(po->lsab_used == 0);
@@ -1597,12 +1602,13 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
   ASSERT(offset == sizeof(struct ospf_lsa_ac_tlv) + sizeof(*(po->rhwf)));
 
   add_usp_tlvs(po);
-  offset = po->lsab_used;
+  //offset = po->lsab_used;
   //ASSERT...
 
-  /*WALK_LIST(ifa,oa->po->iface_list)
-  {
-    ifa->*/
+  add_asp_tlvs(po);
+  // offset = po->lsab_used;
+  // ASSERT...
+
   *length = po->lsab_used + sizeof(struct ospf_lsa_header);
   return lsab_flush(po);
 }
