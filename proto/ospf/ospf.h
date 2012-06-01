@@ -90,8 +90,9 @@ struct ospf_config
   byte rfc1583;
 #ifdef OSPFv3
   byte dridd;                   /* Is duplicate RID detection enabled? */
-  byte pxassignment;            /* Is prefix assignment enables? */
-  list usable_prefix_list;      /* list of struct prefix_node */
+  byte pxassignment;            /* Is prefix assignment enabled? */
+  list usp_list;                /* list of struct prefix_node.
+                                   Usable Prefixes to be placed in our own AC LSAs */
 #endif
   byte abr;
   int ecmp;
@@ -238,12 +239,18 @@ struct ospf_iface
   s16 px_pos_end;		/* Position of iface in Rt Prefix-LSA, end, exclusive */
 
   u32 dr_iface_id;		/* if drid is valid, this is iface_id of DR (for connecting network) */
-#define OSPF_HOMENET_IID = 240  /* Instance ID of interfaces running HOMENET-OSPF. See RFC TBD */
+#define OSPF_HOMENET_IID = 240  /* Instance ID of interfaces running OSPF Auto-Configuration. See RFC TBD */
  /* IID 240(0xF0): unassigned by IANA */
   u8 instance_id;		/* Used to differentiate between more OSPF
 				   instances on one interface */
-  list assigned_prefix_list;    /* List of prefixes that have been assigned to this interface
-                                   from a usable prefix */
+  list asp_list;                /* list of struct ospf_asp.
+                                   List of prefixes that have been assigned to this interface
+                                   by us from a usable prefix */
+  list usp_list;                /* list of struct ospf_usp.
+                                   Each node corresponds to one Usable Prefix learned via OSPF,
+                                   a pointer to the current interface and a timer for prefix assignment.
+                                   See RFC TBD /
+                                   http://tools.ietf.org/html/draft-arkko-homenet-prefix-assignment-01 section 5.3.2 */
 #endif
 
   u8 type;			/* OSPF view of type */
@@ -611,6 +618,14 @@ struct ospf_lsa_ac_tlv /* Generic TLV */
   u32 value[];
 };
 
+#define LSA_AC_USP_MIN_PREFIX_LENGTH 8
+#define LSA_AC_USP_MAX_PREFIX_LENGTH 64
+#define LSA_AC_ASP_MIN_PREFIX_LENGTH 64
+#define LSA_AC_ASP_MAX_PREFIX_LENGTH 64
+
+/* http://tools.ietf.org/html/draft-arkko-homenet-prefix-assignment-01 section 5.3.2 */
+#define PXASSIGN_DELAY 5
+
 struct ospf_lsa_ac_tlv_v_usp /* One Usable Prefix */
 {
 # ifdef CPU_BIG_ENDIAN
@@ -685,6 +700,16 @@ lsa_net_count(struct ospf_lsa_header *lsa)
    bytes necessary to represent the prefix, NOT INCLUDING padding */
 #define IPV6_PREFIX_SPACE_NOPAD(x) (4 + (((x) + 7) / 8))
 
+/**
+ * lsa_get_ipv6_prefix - Get a prefix from host prefix representation
+ * @buf: Pointer to beginning of prefix representation
+ * @addr: Pointer to where to store the address of the prefix
+ * @pxlen: Pointer to where to store the prefix length
+ * @pxopts: Pointer to where to store the prefix opts
+ * @rest: Pointer to where to store the reserved field of the representation
+ *
+ * Returns a pointer to the first word after the representation
+ */
 static inline u32 *
 lsa_get_ipv6_prefix(u32 *buf, ip_addr *addr, int *pxlen, u8 *pxopts, u16 *rest)
 {
@@ -886,9 +911,9 @@ struct proto_ospf
   byte dridd;                   /* Is duplicate RID detection enabled? */
   byte pxassignment;            /* Is prefix assignment enables? */
   byte pxassign;                /* Prefix assignment scheduled? */
-  list usable_prefix_list;      /* List of prefix pools from which it is possible to assign
-                                   prefixes to interfaces */
-  list assigned_prefix_list;    /* List of prefixes that have been
+  list usp_list;                /* list of struct prefix_node.
+                                   Usable Prefixes to be placed in our own AC LSAs */
+  list asp_list;                /* List of prefixes that have been
                                    assigned to an interface in the OSPF network */
 #endif
   byte ebit;			/* Did I originate any ext lsa? */
@@ -969,7 +994,7 @@ static inline int oa_is_nssa(struct ospf_area *oa)
 #ifdef OSPFv3
 void schedule_link_lsa(struct ospf_iface *ifa);
 void schedule_ac_lsa(struct ospf_area *oa);
-void schedule_prefix_assign(struct proto_ospf *po);
+void schedule_pxassign(struct proto_ospf *po);
 #else
 static inline void schedule_link_lsa(struct ospf_iface *ifa UNUSED) {}
 #endif

@@ -478,7 +478,7 @@ lsa_validate_ac_tlv_usp(u8 *rhwf)
 {
   struct ospf_lsa_ac_tlv_v_usp *tlv = (struct ospf_lsa_ac_tlv_v_usp *) (rhwf + sizeof(struct ospf_lsa_ac_tlv));
 
-  if(tlv->pxlen < 8 || tlv->pxlen > 64)
+  if(tlv->pxlen < LSA_AC_USP_MIN_PREFIX_LENGTH || tlv->pxlen > LSA_AC_USP_MAX_PREFIX_LENGTH)
     return 0;
 
   /* FIXME other tests on prefix? */
@@ -491,7 +491,7 @@ lsa_validate_ac_tlv_asp(u8 *rhwf)
 {
   struct ospf_lsa_ac_tlv_v_asp *tlv = (struct ospf_lsa_ac_tlv_v_asp *) (rhwf + sizeof(struct ospf_lsa_ac_tlv));
 
-  if(tlv->pxlen != 64)
+  if(tlv->pxlen < LSA_AC_ASP_MIN_PREFIX_LENGTH || tlv->pxlen > LSA_AC_ASP_MAX_PREFIX_LENGTH)
     return 0;
 
   /* FIXME other tests on prefix / interface ID? */
@@ -630,7 +630,7 @@ lsa_install_new(struct proto_ospf *po, struct ospf_lsa_header *lsa, u32 domain, 
   if (change)
   {
     schedule_rtcalc(po);
-    schedule_prefix_assign(po);
+    schedule_pxassign(po);
   }
 
   return en;

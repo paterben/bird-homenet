@@ -255,12 +255,12 @@ ospf_start(struct proto *p)
     log(L_WARN "%s: Duplicate RID detection should be enabled when using a randomly generated RID", p->name);
   po->rhwf = mb_alloc(p->pool, sizeof(struct ospf_rhwf)); /* TODO get size of allocation from lower layer */
   ospf_set_rhwf(po);
-  init_list(&(po->usable_prefix_list));
-  WALK_LIST(n,c->usable_prefix_list)
+  init_list(&(po->usp_list));
+  WALK_LIST(n,c->usp_list)
   {
     ospf_usp_add(po,n);
   }
-  init_list(&(po->assigned_prefix_list));
+  init_list(&(po->asp_list));
 #endif
   po->ebit = 0;
   po->ecmp = c->ecmp;
@@ -450,19 +450,22 @@ schedule_ac_lsa(struct ospf_area *oa)
 {
   struct proto *p = &oa->po->proto;
 
+  if (oa->origac)
+    return;
+
   OSPF_TRACE(D_EVENTS, "Scheduling AC-LSA origination for area %R", oa->areaid);
   oa->origac = 1;
 }
 
 /**
- * schedule_prefix_assign - Schedule prefix assignment to be performed
+ * schedule_pxassign - Schedule prefix assignment to be performed
  * @oa: The area in which to perform prefix assignment
  *
  * This function tells OSPF to perform prefix assignment on next call of area_disp.
  *
  */
 void
-schedule_prefix_assign(struct proto_ospf *po)
+schedule_pxassign(struct proto_ospf *po)
 {
   struct proto *p = &po->proto;
 
@@ -550,7 +553,7 @@ ospf_disp(timer * timer)
 
   /* Perform prefix assignment if needed */
   if(po->pxassignment && po->pxassign)
-    ospf_prefix_assign(po);
+    ospf_pxassign(po);
 }
 
 /**
@@ -699,7 +702,7 @@ ospf_set_rhwf(struct proto_ospf *po)
  * @n: prefix to add
  *
  * Appends the prefix to the end of the protocol's
- * usable_prefix_list.
+ * usp_list.
  */
 static void
 ospf_usp_add(struct proto_ospf *po, struct prefix_node *n)
@@ -710,7 +713,7 @@ ospf_usp_add(struct proto_ospf *po, struct prefix_node *n)
   OSPF_TRACE(D_EVENTS, "Adding prefix %I/%d to list of usable prefixes", n->px.addr, n->px.len);
 
   ncopy = mb_allocz(p->pool, sizeof(struct prefix_node));
-  add_tail(&po->usable_prefix_list, NODE ncopy);
+  add_tail(&po->usp_list, NODE ncopy);
   ncopy->px.addr = n->px.addr;
   ncopy->px.len = n->px.len;
 }
@@ -802,8 +805,8 @@ ospf_usp_reconfigure(struct proto_ospf *po, struct ospf_config *old, struct ospf
 
   /* FIXME we need to do much better: find the config differences,
      possibly deassign addresses from interfaces */
-  init_list(&po->usable_prefix_list); /* empties the list */
-  WALK_LIST(n,new->usable_prefix_list)
+  init_list(&po->usp_list); /* empties the list */
+  WALK_LIST(n,new->usp_list)
   {
     ospf_usp_add(po,n);
   }
@@ -1068,6 +1071,36 @@ ospf_sh_iface(struct proto *p, char *iff)
 }
 
 void
+ospf_sh_asp(struct proto *p)
+{
+#ifdef OSPFv3
+  struct proto_ospf *po = (struct proto_ospf *) p;
+  struct ospf_iface *ifa;
+  struct ospf_asp *n;
+
+  if (p->proto_state != PS_UP)
+  {
+    cli_msg(-1020, "%s: is not up", p->name);
+    cli_msg(0, "");
+    return;
+  }
+
+  cli_msg(-1020, "%-10s%-39s%-s", "Interface", "Prefix", "Prefix Length");
+  WALK_LIST(ifa, po->iface_list)
+  {
+    WALK_LIST(n, ifa->asp_list)
+      cli_msg(-1020, "%-10s%-1I/%-12d", ifa->iface->name, n->ip, n->pxlen);
+  }
+  cli_msg(0, "");
+  return;
+#else /* OSPFv2 */
+  cli_msg(-1020, "Command only available for OSPFv3");
+  cli_msg(0, "");
+  return;
+#endif
+}
+
+void
 ospf_sh_usp(struct proto *p)
 {
 #ifdef OSPFv3
@@ -1082,7 +1115,7 @@ ospf_sh_usp(struct proto *p)
   }
 
   cli_msg(-1020, "%-39s%-s", "Prefix", "Prefix Length");
-  WALK_LIST(n,po->usable_prefix_list)
+  WALK_LIST(n,po->usp_list)
   {
     cli_msg(-1020, "%-1I/%-12d", n->px.addr, n->px.len);
   }

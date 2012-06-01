@@ -1465,7 +1465,7 @@ add_usp_tlvs(struct proto_ospf *po)
   int offset;
 
   // Add all prefixes from usable prefix list
-  WALK_LIST(n, po->usable_prefix_list)
+  WALK_LIST(n, po->usp_list)
   {
     offset = po->lsab_used;
     usp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
@@ -1493,7 +1493,7 @@ add_asp_tlv(struct proto_ospf *po)
   asp->type = LSA_AC_TLV_T_ASP;
 
   // Add all prefixes from assigned prefix list
-  WALK_LIST(px , po->assigned_prefix_list)
+  WALK_LIST(px , po->asp_list)
   {
     lsa_put_prefix(po, px->addr, px->len, 0);
   }
@@ -1862,6 +1862,7 @@ find_matching_ac_lsa(struct top_hash_entry *e, u32 domain)
   return e;
 }
 
+/* we don't know LSA ID or Router ID, we look for the first AC LSA in area */
 struct top_hash_entry *
 ospf_hash_find_ac_lsa_first(struct top_graph *f, u32 domain)
 {

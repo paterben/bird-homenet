@@ -25,6 +25,11 @@ typedef struct timer {
   bird_clock_t expires;			/* 0=inactive */
 } timer;
 
+typedef struct timer_node {
+  node n;
+  timer t;
+} timer_node;
+
 timer *tm_new(pool *);
 void tm_start(timer *, unsigned after);
 void tm_stop(timer *);
