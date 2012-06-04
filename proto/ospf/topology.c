@@ -1487,7 +1487,7 @@ add_asp_tlvs(struct proto_ospf *po)
 {
   struct ospf_lsa_ac_tlv *asp;
   struct ospf_iface *ifa;
-  struct ospf_asp *n;
+  struct prefix_node *n;
   //int offset;
 
     // Add all prefixes from asp_lists of all interfaces
@@ -1499,9 +1499,9 @@ add_asp_tlvs(struct proto_ospf *po)
       asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
       asp->type = LSA_AC_TLV_T_ASP;
       put_u32(lsab_alloc(po, sizeof(u32)), ifa->iface->index);
-      lsa_put_prefix(po, n->ip, n->pxlen, 0);
+      lsa_put_prefix(po, n->px.addr, n->px.len, 0);
       //asp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
-      asp->length = IPV6_PREFIX_SPACE_NOPAD(n->pxlen) + sizeof(u32);
+      asp->length = IPV6_PREFIX_SPACE_NOPAD(n->px.len) + sizeof(u32);
     }
   }
 }

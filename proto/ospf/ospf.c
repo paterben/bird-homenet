@@ -1076,7 +1076,7 @@ ospf_sh_asp(struct proto *p)
 #ifdef OSPFv3
   struct proto_ospf *po = (struct proto_ospf *) p;
   struct ospf_iface *ifa;
-  struct ospf_asp *n;
+  struct prefix_node *n;
 
   if (p->proto_state != PS_UP)
   {
@@ -1089,7 +1089,7 @@ ospf_sh_asp(struct proto *p)
   WALK_LIST(ifa, po->iface_list)
   {
     WALK_LIST(n, ifa->asp_list)
-      cli_msg(-1020, "%-10s%-1I/%-12d", ifa->iface->name, n->ip, n->pxlen);
+      cli_msg(-1020, "%-10s%-1I/%-12d", ifa->iface->name, n->px.addr, n->px.len);
   }
   cli_msg(0, "");
   return;

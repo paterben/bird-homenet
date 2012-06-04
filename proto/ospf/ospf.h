@@ -243,7 +243,7 @@ struct ospf_iface
  /* IID 240(0xF0): unassigned by IANA */
   u8 instance_id;		/* Used to differentiate between more OSPF
 				   instances on one interface */
-  list asp_list;                /* list of struct ospf_asp.
+  list asp_list;                /* list of struct prefix_node.
                                    List of prefixes that have been assigned to this interface
                                    by us from a usable prefix */
   list usp_list;                /* list of struct ospf_usp.
@@ -1004,6 +1004,7 @@ void ospf_sh(struct proto *p);
 void ospf_sh_iface(struct proto *p, char *iff);
 void ospf_sh_state(struct proto *p, int verbose, int reachable);
 void ospf_sh_usp(struct proto *p);
+void ospf_sh_asp(struct proto *p);
 
 #define SH_ROUTER_SELF 0xffffffff
 

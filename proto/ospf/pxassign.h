@@ -18,17 +18,9 @@
 struct ospf_usp /* (timer, interface, usable prefix) tuple */
 {
   node n;
+  struct prefix px;
   timer *pxassign_timer;
   struct ospf_iface *ifa;
-  ip_addr ip;
-  int pxlen;
-};
-
-struct ospf_asp
-{
-  node n;
-  ip_addr ip;
-  int pxlen;
 };
 
 void ospf_pxassign(struct proto_ospf *po);

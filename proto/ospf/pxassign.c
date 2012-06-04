@@ -46,7 +46,7 @@ ospf_pxassign(struct proto_ospf *po)
  * Updates @offset to point to the next TLV, or to after the last TLV if
  * there are no more TLVs of the specified type.
  */
-static struct ospf_lsa_ac_tlv *
+static void *
 find_next_tlv(struct ospf_lsa_ac *lsa, int *offset, unsigned int size, u8 type)
 {
   unsigned int bound = size - 4;
@@ -57,7 +57,7 @@ find_next_tlv(struct ospf_lsa_ac *lsa, int *offset, unsigned int size, u8 type)
     old_offset = *offset;
     *offset += LSA_AC_TLV_SPACE(((struct ospf_lsa_ac_tlv *)(tlv + *offset))->length);
     if(((struct ospf_lsa_ac_tlv *)(tlv + old_offset))->type == type)
-      return (struct ospf_lsa_ac_tlv *)(tlv + old_offset);
+      return tlv + old_offset;
   }
   while (*offset <= bound);
 
@@ -65,18 +65,18 @@ find_next_tlv(struct ospf_lsa_ac *lsa, int *offset, unsigned int size, u8 type)
 }
 
 /**
- * already_assigned - Check if an assignment exists for a usable prefix
+ * already_assigned - Check if an assignment exists on this interface from a usable prefix
  * @usp: The current usable prefix to check (contains a pointer to current interface)
  */
 int
 already_assigned(struct ospf_usp *usp)
 {
   struct ospf_iface *ifa = usp->ifa;
-  struct ospf_asp *asp;
+  struct prefix_node *asp;
 
   WALK_LIST(asp, ifa->asp_list)
   {
-    if(net_in_net(asp->ip, asp->pxlen, usp->ip, usp->pxlen))
+    if(net_in_net(asp->px.addr, asp->px.len, usp->px.addr, usp->px.len))
       return 1;
   }
   return 0;
@@ -127,12 +127,12 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
   struct ospf_iface *ifa;
   struct ospf_usp *usp;
   timer *pxassign_timer;
-  ip_addr ip;
-  int pxlen;
+  ip_addr addr;
+  unsigned int len;
   u8 pxopts;
   u16 rest;
 
-  lsa_get_ipv6_prefix((u32 *)cusp, &ip, &pxlen, &pxopts, &rest);
+  lsa_get_ipv6_prefix((u32 *)cusp, &addr, &len, &pxopts, &rest);
 
   //OSPF_TRACE(D_EVENTS, "Starting prefix assignment algorithm for prefix %I/%d", ip, pxlen);
 
@@ -151,7 +151,7 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
       pxassign_timer->hook = pxassign_timer_hook;
       pxassign_timer->recurrent = 0;
       DBG("%s: Installing prefix assignment timer for interface %s, usable prefix %I/%d.\n",
-          p->name, ifa->name, ip, pxlen);
+          p->name, ifa->name, addr, len);
       tm_start(pxassign_timer, PXASSIGN_DELAY);
 
       /* create a structure to associate the timer, the interface and the usable prefix */
@@ -159,8 +159,8 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
       add_tail(&ifa->usp_list, NODE usp);
       usp->pxassign_timer = pxassign_timer;
       usp->ifa = ifa;
-      usp->ip = ip;
-      usp->pxlen = pxlen;
+      usp->px.addr = addr;
+      usp->px.len = len;
 
       /* associate timer with interface and usable prefix */
       pxassign_timer->data = usp;
@@ -172,52 +172,81 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
   }
 }
 
+/**
+ * random_prefix - Select a random sub-prefix of specified length
+ * @px: A pointer to the prefix
+ * @pxsub: A pointer to the sub-prefix. Length field must be set.
+ */
 static void
-random_prefix(ip_addr *ipu, int pxlenu, int pxlen, ip_addr *ip)
+random_prefix(struct prefix *px, struct prefix *pxsub)
 {
-  if (pxlenu < 32 && pxlen > 0)
-    _I0(*ip) = random_u32();
-  if (pxlenu < 64 && pxlen > 32)
-    _I1(*ip) = random_u32();
-  if (pxlenu < 96 && pxlen > 64)
-    _I2(*ip) = random_u32();
-  if (pxlenu < 128 && pxlen > 96)
-    _I3(*ip) = random_u32();
+  if (px->len < 32 && pxsub->len > 0)
+    _I0(pxsub->addr) = random_u32();
+  if (px->len < 64 && pxsub->len > 32)
+    _I1(pxsub->addr) = random_u32();
+  if (px->len < 96 && pxsub->len > 64)
+    _I2(pxsub->addr) = random_u32();
+  if (px->len < 128 && pxsub->len > 96)
+    _I3(pxsub->addr) = random_u32();
 
   // clean up right part of prefix
-  if (pxlen < 128)
-    ip->addr[pxlen / 32] &= u32_mkmask(pxlen % 32);
+  if (px->len < 128)
+    pxsub->addr.addr[pxsub->len / 32] &= u32_mkmask(pxsub->len % 32);
 
   // clean up left part of prefix
-  *ip = ipa_and(*ip, ipa_not(ipa_mkmask(pxlenu)));
+  pxsub->addr = ipa_and(pxsub->addr, ipa_not(ipa_mkmask(px->len)));
 
   // set left part of prefix
-  *ip = ipa_or(*ip, *ipu);
+  pxsub->addr = ipa_or(pxsub->addr, px->addr);
 }
 
 /**
- * choose_prefix - Choose a prefix from a usable prefix and list of sub-prefixes in use
- * @ipu: The usable prefix
- * @pxlenu: The usable prefix length
- * @pxlen: The length of the prefix to choose
- * @ip: A pointer to the ip_addr to modify
+ * in_use - Determine if a prefix is already in use
+ * @px: The prefix of interest
+ * @used: A list of struct prefix_node
+ *
+ * This function returns 1 if @px is a sub-prefix of any
+ * of the prefixes in @used, 0 otherwise.
+ */
+static int
+in_use(struct prefix *px, list used)
+{
+  struct prefix_node *pxn;
+
+  WALK_LIST(pxn, used){
+    if(net_in_net(px->addr, px->len, pxn->px.addr, pxn->px.len))
+      return 1;
+  }
+  return 0;
+}
+
+/**
+ * choose_prefix - Choose a prefix of specified length from
+ * a usable prefix and a list of sub-prefixes in use
+ * @pxu: The usable prefix
+ * @px: A pointer to the prefix structure. Length must be set.
  * @used: The list of sub-prefixes already in use
  *
  * This function stores a unused prefix of specified length from
- * the usable prefix in @ip, and returns PXCHOOSE_SUCCESS,
- * or stores IPA_NONE into @ip and returns PXCHOOSE_FAILURE if
+ * the usable prefix @pxu, and returns PXCHOOSE_SUCCESS,
+ * or stores IPA_NONE into @px->ip and returns PXCHOOSE_FAILURE if
  * all prefixes are in use.
  */
 static int
-choose_prefix(ip_addr *ipu, int pxlenu, int pxlen, ip_addr *ip, list used)
+choose_prefix(struct prefix *pxu, struct prefix *px, list used)
 {
   /* (Stupid) Algorithm:
      - try a random prefix until success or 10 attempts have passed
      - if failure, increment the last prefix attempted until success,
        or until we realize there are no available prefixes */
-  //FIXME TODO
-  random_prefix(ipu, pxlenu, pxlen, ip);
-  return PXCHOOSE_SUCCESS;
+  int i;
+  for(i=0;i<10;i++){
+    random_prefix(pxu, px);
+    if(!in_use(px, used))
+      return PXCHOOSE_SUCCESS;
+  }
+  // TODO
+  return PXCHOOSE_FAILURE;
 }
 
 /** ospf_pxassign_resp - Step 5 of prefix assignment algorithm
@@ -239,12 +268,13 @@ ospf_pxassign_resp(struct ospf_usp *usp)
   struct top_hash_entry *en;
   struct ospf_lsa_ac_tlv *tlv;
   struct ospf_lsa_ac_tlv_v_asp *asp;
-  struct ospf_asp *self_asp;
+  struct prefix_node *self_asp;
+  struct prefix px_tmp;
   list used; /* list of struct prefix_node */
   unsigned int offset;
   unsigned int size;
-  ip_addr ip;
-  int pxlen;
+  ip_addr addr;
+  unsigned int len;
   u8 pxopts;
   u16 rest;
 
@@ -265,18 +295,19 @@ ospf_pxassign_resp(struct ospf_usp *usp)
       {
         /* test if assigned prefix is part of current usable prefix */
         asp = (struct ospf_lsa_ac_tlv_v_asp *)(tlv->value);
-        lsa_get_ipv6_prefix((u32 *)(asp) + 1, &ip, &pxlen, &pxopts, &rest);
-        if(net_in_net(ip, pxlen, usp->ip, usp->pxlen))
+        lsa_get_ipv6_prefix((u32 *)(asp) + 1, &addr, &len, &pxopts, &rest);
+        if(net_in_net(addr, len, usp->px.addr, usp->px.len))
         {
           /* add prefix to list of used prefixes */
-          struct ospf_asp *px = mb_alloc(ifa->pool, sizeof(struct ospf_asp));
-          add_tail(&used, NODE px);
-          px->ip = ip;
-          px->pxlen = pxlen;
+          struct prefix_node *pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
+          add_tail(&used, NODE pxn);
+          pxn->px.addr = addr;
+          pxn->px.len = len;
         }
       }
     } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
   }
+  // FIXME also check our interface lists for very recently assigned prefixes
 
   /* 5.3.5a and three quarters */
   /* FIXME this step doesn't exist in algorithm */
@@ -287,21 +318,21 @@ ospf_pxassign_resp(struct ospf_usp *usp)
   /* FIXME implement 5.3.5b */
 
   /* 5.3.5c */
-  ip = IPA_NONE;
-  pxlen = LSA_AC_ASP_MAX_PREFIX_LENGTH;
-  switch(choose_prefix(&usp->ip, usp->pxlen, pxlen, &ip, used))
+  px_tmp.addr = IPA_NONE;
+  px_tmp.len = LSA_AC_ASP_MAX_PREFIX_LENGTH;
+  switch(choose_prefix(&usp->px, &px_tmp, used))
   {
     case PXCHOOSE_FAILURE:
       die("No prefixes left to assign.");
       break;
     case PXCHOOSE_SUCCESS:
       //FIXME do prefix assignment!
-      self_asp = mb_alloc(ifa->pool, sizeof(struct ospf_asp));
+      self_asp = mb_alloc(ifa->pool, sizeof(struct prefix_node));
       add_tail(&ifa->asp_list, NODE self_asp);
-      self_asp->ip = ip;
-      self_asp->pxlen = pxlen;
+      self_asp->px.addr = px_tmp.addr;
+      self_asp->px.len = px_tmp.len;
 
-      OSPF_TRACE(D_EVENTS, "From prefix %I/%d, chose prefix %I/%d to assign to interface %s", usp->ip, usp->pxlen, ip, pxlen, ifa->iface->name);
+      OSPF_TRACE(D_EVENTS, "From prefix %I/%d, chose prefix %I/%d to assign to interface %s", usp->px.addr, usp->px.len, px_tmp.addr, px_tmp.len, ifa->iface->name);
       break;
   }
   /* 5.3.5d */
