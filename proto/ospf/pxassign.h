@@ -15,6 +15,9 @@
 #define PXCHOOSE_SUCCESS  0
 #define PXCHOOSE_FAILURE -1
 
+/* http://tools.ietf.org/html/draft-arkko-homenet-prefix-assignment-01 section 5.3.2 */
+#define PXASSIGN_DELAY 5
+
 struct ospf_usp /* (timer, interface, usable prefix) tuple */
 {
   node n;

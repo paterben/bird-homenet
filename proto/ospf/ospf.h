@@ -623,9 +623,6 @@ struct ospf_lsa_ac_tlv /* Generic TLV */
 #define LSA_AC_ASP_MIN_PREFIX_LENGTH 64
 #define LSA_AC_ASP_MAX_PREFIX_LENGTH 64
 
-/* http://tools.ietf.org/html/draft-arkko-homenet-prefix-assignment-01 section 5.3.2 */
-#define PXASSIGN_DELAY 5
-
 struct ospf_lsa_ac_tlv_v_usp /* One Usable Prefix */
 {
 # ifdef CPU_BIG_ENDIAN

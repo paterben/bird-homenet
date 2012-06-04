@@ -65,11 +65,11 @@ find_next_tlv(struct ospf_lsa_ac *lsa, int *offset, unsigned int size, u8 type)
 }
 
 /**
- * already_assigned - Check if an assignment exists on this interface from a usable prefix
+ * assignment_exists - Check if an assignment exists on this interface from a usable prefix
  * @usp: The current usable prefix to check (contains a pointer to current interface)
  */
 int
-already_assigned(struct ospf_usp *usp)
+assignment_exists(struct ospf_usp *usp)
 {
   struct ospf_iface *ifa = usp->ifa;
   struct prefix_node *asp;
@@ -262,24 +262,19 @@ void
 ospf_pxassign_resp(struct ospf_usp *usp)
 {
   struct ospf_iface *ifa = usp->ifa;
+  struct ospf_iface *ifan;
   struct proto_ospf *po = ifa->oa->po;
   struct proto *p = &po->proto;
   struct ospf_area *oa;
   struct top_hash_entry *en;
   struct ospf_lsa_ac_tlv *tlv;
   struct ospf_lsa_ac_tlv_v_asp *asp;
-  struct prefix_node *self_asp;
   struct prefix px_tmp;
+  struct prefix_node *n, *pxn;
   list used; /* list of struct prefix_node */
-  unsigned int offset;
-  unsigned int size;
-  ip_addr addr;
-  unsigned int len;
-  u8 pxopts;
-  u16 rest;
 
   DBG("%s: I am responsible router for interface %d and USP %I/%d.\n",
-          p->name, ifa->name, ip, pxlen);
+          p->name, ifa->iface->name, usp->px.addr, usp->px.len);
 
   /* 5.3.5a */
   init_list(&used);
@@ -289,17 +284,23 @@ ospf_pxassign_resp(struct ospf_usp *usp)
       continue; /* no LSAs in this area, nothing to do */
 
     do {
-      size = en->lsa.length - sizeof(struct ospf_lsa_header);
-      offset = 0;
+      ip_addr addr;
+      unsigned int len;
+      u8 pxopts;
+      u16 rest;
+      unsigned int size = en->lsa.length - sizeof(struct ospf_lsa_header);
+      unsigned int offset = 0;
+
       while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_ASP)) != NULL)
       {
+
         /* test if assigned prefix is part of current usable prefix */
         asp = (struct ospf_lsa_ac_tlv_v_asp *)(tlv->value);
         lsa_get_ipv6_prefix((u32 *)(asp) + 1, &addr, &len, &pxopts, &rest);
         if(net_in_net(addr, len, usp->px.addr, usp->px.len))
         {
           /* add prefix to list of used prefixes */
-          struct prefix_node *pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
+          pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
           add_tail(&used, NODE pxn);
           pxn->px.addr = addr;
           pxn->px.len = len;
@@ -307,11 +308,28 @@ ospf_pxassign_resp(struct ospf_usp *usp)
       }
     } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
   }
-  // FIXME also check our interface lists for very recently assigned prefixes
+
+  /* we also check our own interfaces for assigned prefixes which have not yet had time
+     to be inserted in LSADB. Alternative would be to originate AC LSA immediately
+     in step 5.3.5d instead of simply scheduling origination. */
+  WALK_LIST(ifan, po->iface_list)
+  {
+    WALK_LIST(n, ifan->asp_list)
+    {
+      if(net_in_net(n->px.addr, n->px.len, usp->px.addr, usp->px.len))
+      {
+        /* add prefix to list of used prefixes */
+        pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
+        add_tail(&used, NODE pxn);
+        pxn->px.addr = n->px.addr;
+        pxn->px.len = n->px.len;
+      }
+    }
+  }
 
   /* 5.3.5a and three quarters */
   /* FIXME this step doesn't exist in algorithm */
-  if(already_assigned(usp))
+  if(assignment_exists(usp))
     return;
 
   /* 5.3.5b */
@@ -323,14 +341,14 @@ ospf_pxassign_resp(struct ospf_usp *usp)
   switch(choose_prefix(&usp->px, &px_tmp, used))
   {
     case PXCHOOSE_FAILURE:
-      die("No prefixes left to assign.");
+      log(L_WARN "%s: No prefixes left to assign to interface %s from prefix %I/%d.", p->name, ifa->iface->name, usp->px.addr, usp->px.len);
       break;
     case PXCHOOSE_SUCCESS:
       //FIXME do prefix assignment!
-      self_asp = mb_alloc(ifa->pool, sizeof(struct prefix_node));
-      add_tail(&ifa->asp_list, NODE self_asp);
-      self_asp->px.addr = px_tmp.addr;
-      self_asp->px.len = px_tmp.len;
+      pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
+      add_tail(&ifa->asp_list, NODE pxn);
+      pxn->px.addr = px_tmp.addr;
+      pxn->px.len = px_tmp.len;
 
       OSPF_TRACE(D_EVENTS, "From prefix %I/%d, chose prefix %I/%d to assign to interface %s", usp->px.addr, usp->px.len, px_tmp.addr, px_tmp.len, ifa->iface->name);
       break;
