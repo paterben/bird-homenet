@@ -272,6 +272,7 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
     }
 
     /* 5.3.3 */
+    byte found_assignment = 0;
     WALK_LIST(neigh, ifa->neigh_list)
     {
       if(neigh->state >= NEIGHBOR_EXSTART)
@@ -298,13 +299,13 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
                 /* a prefix has already been assigned by a neighbor to the link */
                 // FIXME do physical prefix assignment
                 // FIXME find list of assigned prefixes, keep only highest RID's
-                return;
+                found_assignment = 1;
               }
-            }
-          }
+            } if(found_assignment) { break; }
+          } if(found_assignment) { break; }
         } while((en = ospf_hash_find_router_ac_lsa_next(en)) != NULL);
-      }
-    }
+      } if(found_assignment) { break; }
+    } if(found_assignment) { continue; }
 
     /* 5.3.4 */
     if(is_highest_rid(ifa))
