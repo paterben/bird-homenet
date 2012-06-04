@@ -19,20 +19,6 @@
 
 #ifdef OSPFv3
 
-void
-ospf_pxassign(struct proto_ospf *po)
-{
-  struct proto *p = &po->proto;
-  struct ospf_area *oa;
-
-  OSPF_TRACE(D_EVENTS, "Starting prefix assignment algorithm");
-
-  WALK_LIST(oa, po->area_list)
-    ospf_pxassign_area(oa);
-
-  po->pxassign = 0;
-}
-
 /**
  * find_next_tlv - find next TLV of specified type in AC LSA
  * @lsa: A pointer to the beginning of the LSA body
@@ -65,10 +51,27 @@ find_next_tlv(struct ospf_lsa_ac *lsa, int *offset, unsigned int size, u8 type)
 }
 
 /**
+ * is_highest_rid - Determine if we have the highest RID on a link
+ * @ifa: The interface on which to perform the check
+ */
+static int
+is_highest_rid(struct ospf_iface *ifa)
+{
+  struct ospf_neighbor *n;
+
+  WALK_LIST(n, ifa->neigh_list)
+  {
+    if(n->rid > ifa->oa->po->router_id)
+      return 0;
+  }
+  return 1;
+}
+
+/**
  * assignment_exists - Check if an assignment exists on this interface from a usable prefix
  * @usp: The current usable prefix to check (contains a pointer to current interface)
  */
-int
+static int
 assignment_exists(struct ospf_usp *usp)
 {
   struct ospf_iface *ifa = usp->ifa;
@@ -80,96 +83,6 @@ assignment_exists(struct ospf_usp *usp)
       return 1;
   }
   return 0;
-}
-
-/**
- * ospf_pxassign_area - Run prefix assignment algorithm for
- * usable prefixes advertised by AC LSAs in a specific area.
- *
- * @oa: The area to search for LSAs in. Note that the algorithm
- * may impact interfaces that are not in this area.
- */
-void
-ospf_pxassign_area(struct ospf_area *oa)
-{
-  //struct proto *p = &oa->po->proto;
-  struct top_hash_entry *en;
-  struct ospf_lsa_ac_tlv *tlv;
-  unsigned int offset;
-  unsigned int size;
-
-  //OSPF_TRACE(D_EVENTS, "Starting prefix assignment algorithm for AC LSAs in area %R", oa->areaid);
-
-  if((en = ospf_hash_find_ac_lsa_first(oa->po->gr, oa->areaid)) == NULL)
-    return; /* no LSAs in this area, nothing to do */
-
-  do {
-    size = en->lsa.length - sizeof(struct ospf_lsa_header);
-    offset = 0;
-    while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_USP)) != NULL)
-    {
-      ospf_pxassign_usp(oa, (struct ospf_lsa_ac_tlv_v_usp *)(tlv->value));
-    }
-  } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
-}
-
-/** ospf_pxassign_usp - Main prefix assignment algorithm
- *
- * @oa: The area which the Usable Prefix belongs to
- * @usp: The Current Usable Prefix
- */
-void
-ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
-{
-  struct proto_ospf *po = oa->po;
-  struct proto *p = &po->proto;
-  //struct ospf_neighbor *neigh;
-  struct ospf_iface *ifa;
-  struct ospf_usp *usp;
-  timer *pxassign_timer;
-  ip_addr addr;
-  unsigned int len;
-  u8 pxopts;
-  u16 rest;
-
-  lsa_get_ipv6_prefix((u32 *)cusp, &addr, &len, &pxopts, &rest);
-
-  //OSPF_TRACE(D_EVENTS, "Starting prefix assignment algorithm for prefix %I/%d", ip, pxlen);
-
-  WALK_LIST(ifa, po->iface_list)
-  {
-    /* 5.3.1 */
-    /* FIXME I think the draft should say "fully adjacent neighbors", that's what I suppose */
-    byte have_neigh = ifa->fadj > 0;
-
-    /* 5.3.2 */
-    if(!have_neigh)
-    {
-      /* create a new timer */
-      pxassign_timer = tm_new(p->pool);
-      pxassign_timer->randomize = 0;
-      pxassign_timer->hook = pxassign_timer_hook;
-      pxassign_timer->recurrent = 0;
-      DBG("%s: Installing prefix assignment timer for interface %s, usable prefix %I/%d.\n",
-          p->name, ifa->name, addr, len);
-      tm_start(pxassign_timer, PXASSIGN_DELAY);
-
-      /* create a structure to associate the timer, the interface and the usable prefix */
-      usp = mb_alloc(ifa->pool, sizeof(struct ospf_usp));
-      add_tail(&ifa->usp_list, NODE usp);
-      usp->pxassign_timer = pxassign_timer;
-      usp->ifa = ifa;
-      usp->px.addr = addr;
-      usp->px.len = len;
-
-      /* associate timer with interface and usable prefix */
-      pxassign_timer->data = usp;
-
-      continue; // next step will be 5.3.5
-    }
-
-    /* 5.3.3 */
-  }
 }
 
 /**
@@ -247,6 +160,165 @@ choose_prefix(struct prefix *pxu, struct prefix *px, list used)
   }
   // TODO
   return PXCHOOSE_FAILURE;
+}
+
+void
+ospf_pxassign(struct proto_ospf *po)
+{
+  struct proto *p = &po->proto;
+  struct ospf_area *oa;
+
+  OSPF_TRACE(D_EVENTS, "Starting prefix assignment algorithm");
+
+  WALK_LIST(oa, po->area_list)
+    ospf_pxassign_area(oa);
+
+  po->pxassign = 0;
+}
+
+/**
+ * ospf_pxassign_area - Run prefix assignment algorithm for
+ * usable prefixes advertised by AC LSAs in a specific area.
+ *
+ * @oa: The area to search for LSAs in. Note that the algorithm
+ * may impact interfaces that are not in this area.
+ */
+void
+ospf_pxassign_area(struct ospf_area *oa)
+{
+  //struct proto *p = &oa->po->proto;
+  struct top_hash_entry *en;
+  struct ospf_lsa_ac_tlv *tlv;
+  unsigned int offset;
+  unsigned int size;
+
+  //OSPF_TRACE(D_EVENTS, "Starting prefix assignment algorithm for AC LSAs in area %R", oa->areaid);
+
+  if((en = ospf_hash_find_ac_lsa_first(oa->po->gr, oa->areaid)) == NULL)
+    return; /* no LSAs in this area, nothing to do */
+
+  do {
+    size = en->lsa.length - sizeof(struct ospf_lsa_header);
+    offset = 0;
+    while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_USP)) != NULL)
+    {
+      ospf_pxassign_usp(oa, (struct ospf_lsa_ac_tlv_v_usp *)(tlv->value));
+    }
+  } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
+}
+
+/** ospf_pxassign_usp - Main prefix assignment algorithm
+ *
+ * @oa: The area which the Usable Prefix belongs to
+ * @usp: The Current Usable Prefix
+ */
+void
+ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
+{
+  struct top_hash_entry *en;
+  struct proto_ospf *po = oa->po;
+  struct proto *p = &po->proto;
+  //struct ospf_neighbor *neigh;
+  struct ospf_iface *ifa;
+  struct ospf_usp *usp;
+  struct ospf_lsa_ac_tlv *tlv;
+  struct ospf_lsa_ac_tlv_v_asp *asp;
+  struct ospf_neighbor *neigh;
+  timer *pxassign_timer;
+  ip_addr addr;
+  unsigned int len;
+  u8 pxopts;
+  u16 rest;
+
+  lsa_get_ipv6_prefix((u32 *)cusp, &addr, &len, &pxopts, &rest);
+
+  //OSPF_TRACE(D_EVENTS, "Starting prefix assignment algorithm for prefix %I/%d", ip, pxlen);
+
+  WALK_LIST(ifa, po->iface_list)
+  {
+    /* 5.3.1 */
+    /* FIXME I think the draft should say "adjacent routers" (state >= ExStart), that's what I suppose */
+    byte have_neigh = 0;
+    WALK_LIST(neigh, ifa->neigh_list)
+    {
+      if(neigh->state >= NEIGHBOR_EXSTART)
+        have_neigh = 1;
+    }
+
+    /* 5.3.2 */
+    if(!have_neigh)
+    {
+      /* create a new timer */
+      pxassign_timer = tm_new(p->pool);
+      pxassign_timer->randomize = 0;
+      pxassign_timer->hook = pxassign_timer_hook;
+      pxassign_timer->recurrent = 0;
+      DBG("%s: Installing prefix assignment timer for interface %s, usable prefix %I/%d.\n",
+          p->name, ifa->name, addr, len);
+      tm_start(pxassign_timer, PXASSIGN_DELAY);
+
+      /* create a structure to associate the timer, the interface and the usable prefix */
+      usp = mb_alloc(ifa->pool, sizeof(struct ospf_usp));
+      add_tail(&ifa->usp_list, NODE usp);
+      usp->pxassign_timer = pxassign_timer;
+      usp->ifa = ifa;
+      usp->px.addr = addr;
+      usp->px.len = len;
+
+      /* associate timer with interface and usable prefix */
+      pxassign_timer->data = usp;
+
+      continue; // next step will be 5.3.5
+    }
+
+    /* 5.3.3 */
+    WALK_LIST(neigh, ifa->neigh_list)
+    {
+      if(neigh->state >= NEIGHBOR_EXSTART)
+      {
+        if((en = ospf_hash_find_router_ac_lsa_first(oa->po->gr, oa->areaid, neigh->rid)) == NULL)
+          continue; /* no AC LSAs emitted by neighor, nothing to do */
+
+        do {
+          unsigned int size = en->lsa.length - sizeof(struct ospf_lsa_header);
+          unsigned int offset = 0;
+
+          while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_ASP)) != NULL)
+          {
+            asp = (struct ospf_lsa_ac_tlv_v_asp *)(tlv->value);
+            if(asp->id == neigh->iface_id)
+            {
+              ip_addr neigh_addr;
+              unsigned int neigh_len;
+              u8 neigh_pxopts;
+              u16 neigh_rest;
+              lsa_get_ipv6_prefix((u32 *)(asp) + 1, &neigh_addr, &neigh_len, &neigh_pxopts, &neigh_rest);
+              if(net_in_net(neigh_addr, neigh_len, addr, len))
+              {
+                /* a prefix has already been assigned by a neighbor to the link */
+                // FIXME do physical prefix assignment
+                // FIXME find list of assigned prefixes, keep only highest RID's
+                return;
+              }
+            }
+          }
+        } while((en = ospf_hash_find_router_ac_lsa_next(en)) != NULL);
+      }
+    }
+
+    /* 5.3.4 */
+    if(is_highest_rid(ifa))
+    {
+      /* create ospf_usp structure without the timer */
+      usp = mb_alloc(ifa->pool, sizeof(struct ospf_usp));
+      add_tail(&ifa->usp_list, NODE usp);
+      usp->ifa = ifa;
+      usp->px.addr = addr;
+      usp->px.len = len;
+
+      ospf_pxassign_resp(usp);
+    }
+  }
 }
 
 /** ospf_pxassign_resp - Step 5 of prefix assignment algorithm
@@ -353,6 +425,7 @@ ospf_pxassign_resp(struct ospf_usp *usp)
       OSPF_TRACE(D_EVENTS, "From prefix %I/%d, chose prefix %I/%d to assign to interface %s", usp->px.addr, usp->px.len, px_tmp.addr, px_tmp.len, ifa->iface->name);
       break;
   }
+
   /* 5.3.5d */
   schedule_ac_lsa(ifa->oa);
 }
@@ -363,5 +436,7 @@ pxassign_timer_hook(timer *timer)
   struct ospf_usp *usp = (struct ospf_usp *) timer->data;
 
   ospf_pxassign_resp(usp);
+
+  // FIXME destroy timer
 }
 #endif /* OSPFv3 */

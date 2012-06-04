@@ -1498,7 +1498,7 @@ add_asp_tlvs(struct proto_ospf *po)
       //offset = po->lsab_used;
       asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
       asp->type = LSA_AC_TLV_T_ASP;
-      put_u32(lsab_alloc(po, sizeof(u32)), ifa->iface->index);
+      memcpy(lsab_alloc(po, sizeof(u32)), &ifa->iface->index, sizeof(u32));
       lsa_put_prefix(po, n->px.addr, n->px.len, 0);
       //asp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
       asp->length = IPV6_PREFIX_SPACE_NOPAD(n->px.len) + sizeof(u32);
@@ -1868,6 +1868,14 @@ find_matching_ac_lsa(struct top_hash_entry *e, u32 domain)
   return e;
 }
 
+static inline struct top_hash_entry *
+find_matching_router_ac_lsa(struct top_hash_entry *e, u32 domain, u32 rtr)
+{
+  while (e && (e->lsa.type != LSA_T_AC || e->domain != domain || e->lsa.rt != rtr))
+    e = e->next;
+  return e;
+}
+
 /* we don't know LSA ID or Router ID, we look for the first AC LSA in area */
 struct top_hash_entry *
 ospf_hash_find_ac_lsa_first(struct top_graph *f, u32 domain)
@@ -1878,9 +1886,23 @@ ospf_hash_find_ac_lsa_first(struct top_graph *f, u32 domain)
 }
 
 struct top_hash_entry *
+ospf_hash_find_router_ac_lsa_first(struct top_graph *f, u32 domain, u32 rtr)
+{
+  struct top_hash_entry *e;
+  e = f->hash_table[ospf_top_hash(f, domain, 0, 0, LSA_T_AC)];
+  return find_matching_router_ac_lsa(e, domain, rtr);
+}
+
+struct top_hash_entry *
 ospf_hash_find_ac_lsa_next(struct top_hash_entry *e)
 {
   return find_matching_ac_lsa(e->next, e->domain);
+}
+
+struct top_hash_entry *
+ospf_hash_find_router_ac_lsa_next(struct top_hash_entry *e)
+{
+  return find_matching_router_ac_lsa(e->next, e->domain, e->lsa.rt);
 }
 
 /* In OSPFv3, usually we don't know LSA ID when looking for router

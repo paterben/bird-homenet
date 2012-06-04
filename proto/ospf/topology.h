@@ -95,6 +95,8 @@ struct top_hash_entry * ospf_hash_find_rt_first(struct top_graph *f, u32 domain,
 struct top_hash_entry * ospf_hash_find_rt_next(struct top_hash_entry *e);
 struct top_hash_entry * ospf_hash_find_ac_lsa_first(struct top_graph *f, u32 domain);
 struct top_hash_entry * ospf_hash_find_ac_lsa_next(struct top_hash_entry *e);
+struct top_hash_entry * ospf_hash_find_router_ac_lsa_first(struct top_graph *f, u32 domain, u32 rtr);
+struct top_hash_entry * ospf_hash_find_router_ac_lsa_next(struct top_hash_entry *e);
 #endif
 
 
