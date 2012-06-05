@@ -1002,6 +1002,7 @@ void ospf_sh_iface(struct proto *p, char *iff);
 void ospf_sh_state(struct proto *p, int verbose, int reachable);
 void ospf_sh_usp(struct proto *p);
 void ospf_sh_asp(struct proto *p);
+void ospf_sh_usptimers(struct proto *p);
 
 #define SH_ROUTER_SELF 0xffffffff
 

@@ -1070,6 +1070,39 @@ ospf_sh_iface(struct proto *p, char *iff)
   cli_msg(0, "");
 }
 
+void
+ospf_sh_usptimers(struct proto *p)
+{
+#ifdef OSPFv3
+  struct proto_ospf *po = (struct proto_ospf *) p;
+  struct ospf_iface *ifa = NULL;
+  struct ospf_usp *usp;
+
+  if (p->proto_state != PS_UP)
+  {
+    cli_msg(-1022, "%s: is not up", p->name);
+    cli_msg(0, "");
+    return;
+  }
+
+  cli_msg(-1022, "%-11s%-39s%-15s%-7s", "Interface", "Prefix", "Prefix Length", "Timer");
+  WALK_LIST(ifa, po->iface_list)
+  {
+    WALK_LIST(usp, ifa->usp_list)
+    {
+      cli_msg(-1022, "%-11s%-1I%-15d%-7d", ifa->iface->name, usp->px.addr, usp->px.len, usp->pxassign_timer);
+    }
+  }
+
+  cli_msg(0, "");
+  return;
+#else /* OSPFv2 */
+  cli_msg(-1022, "Command only available for OSPFv3");
+  cli_msg(0, "");
+  return;
+#endif
+}
+
 static void
 ospf_sh_asp_lsa(struct top_hash_entry *en)
 {

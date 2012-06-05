@@ -476,7 +476,7 @@ ospf_pxassign_resp(struct ospf_usp *usp)
   /* 5.3.5a and three quarters */
   /* FIXME this step doesn't exist in algorithm */
   if(assignment_exists(usp))
-    return;
+    goto finish;
 
   /* 5.3.5b */
   /* FIXME implement 5.3.5b */
@@ -502,6 +502,15 @@ ospf_pxassign_resp(struct ospf_usp *usp)
 
   /* 5.3.5d */
   schedule_ac_lsa(ifa->oa);
+
+  /* when we are finished, we must remove usp from the interface's usp_list
+     as well as free up the memory taken by the usp.
+     If a timer was allocated, the pxassign_timer_hook function will take
+     care of freeing it.*/
+  finish:
+  rem_node(NODE usp);
+  mb_free(usp);
+
 }
 
 void
@@ -511,6 +520,6 @@ pxassign_timer_hook(timer *timer)
 
   ospf_pxassign_resp(usp);
 
-  // FIXME destroy timer
+  rfree(timer);
 }
 #endif /* OSPFv3 */

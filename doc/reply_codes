@@ -48,6 +48,7 @@ Reply codes of BIRD command-line interface
 1019	Show ROA list
 1020    Show ospf usable
 1021    Show ospf assigned
+1022    Show ospf usptimers
 
 8000	Reply too long
 8001	Route not found
