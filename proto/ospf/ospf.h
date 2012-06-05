@@ -910,7 +910,7 @@ struct proto_ospf
   byte pxassign;                /* Prefix assignment scheduled? */
   list usp_list;                /* list of struct prefix_node.
                                    Usable Prefixes to be placed in our own AC LSAs */
-  list asp_list;                /* List of prefixes that have been
+  /*list asp_list;*/                /* List of prefixes that have been
                                    assigned to an interface in the OSPF network */
 #endif
   byte ebit;			/* Did I originate any ext lsa? */

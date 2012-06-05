@@ -260,7 +260,7 @@ ospf_start(struct proto *p)
   {
     ospf_usp_add(po,n);
   }
-  init_list(&(po->asp_list));
+  //init_list(&(po->asp_list));
 #endif
   po->ebit = 0;
   po->ecmp = c->ecmp;
@@ -1070,34 +1070,87 @@ ospf_sh_iface(struct proto *p, char *iff)
   cli_msg(0, "");
 }
 
+static void
+ospf_sh_asp_lsa(struct top_hash_entry *en)
+{
+  struct ospf_lsa_ac_tlv *tlv = en->lsa_body;
+  unsigned int size = en->lsa.length - sizeof(struct ospf_lsa_header);
+  unsigned int offset = 0;
+  while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_ASP)) != NULL)
+  {
+    struct ospf_lsa_ac_tlv_v_asp *asp = (struct ospf_lsa_ac_tlv_v_asp *) tlv->value;
+    ip_addr addr;
+    unsigned int len;
+    u8 pxopts;
+    u16 rest;
+
+    lsa_get_ipv6_prefix((u32 *)(asp) + 1, &addr, &len, &pxopts, &rest);
+    cli_msg(-1021, "%-20R%-14d%-1I/%-14d", en->lsa.rt, asp->id, addr, len);
+
+  }
+}
+
 void
 ospf_sh_asp(struct proto *p)
 {
 #ifdef OSPFv3
   struct proto_ospf *po = (struct proto_ospf *) p;
   struct ospf_iface *ifa;
+  struct top_hash_entry *en;
   struct prefix_node *n;
 
   if (p->proto_state != PS_UP)
   {
-    cli_msg(-1020, "%s: is not up", p->name);
+    cli_msg(-1021, "%s: is not up", p->name);
     cli_msg(0, "");
     return;
   }
 
-  cli_msg(-1020, "%-10s%-39s%-s", "Interface", "Prefix", "Prefix Length");
+  cli_msg(-1021, "Self-assigned prefixes (may not yet be in LSADB)");
+  cli_msg(-1021, "%-14s%-39s%-15s", "Interface", "Prefix", "Prefix Length");
   WALK_LIST(ifa, po->iface_list)
   {
     WALK_LIST(n, ifa->asp_list)
-      cli_msg(-1020, "%-10s%-1I/%-12d", ifa->iface->name, n->px.addr, n->px.len);
+      cli_msg(-1021, "%-14s%-1I/%-14d", ifa->iface->name, n->px.addr, n->px.len);
   }
+  cli_msg(-1021, "");
+
+  cli_msg(-1021, "All assigned prefixes");
+  cli_msg(-1021, "%-20s%-14s%-39s%-15s", "Advertising Router", "Interface ID", "Prefix", "Prefix Length");
+  WALK_SLIST(en, po->lsal)
+  {
+   if(en->lsa.type == LSA_T_AC)
+    {
+      ospf_sh_asp_lsa(en);
+    }
+  }
+
   cli_msg(0, "");
   return;
 #else /* OSPFv2 */
-  cli_msg(-1020, "Command only available for OSPFv3");
+  cli_msg(-1021, "Command only available for OSPFv3");
   cli_msg(0, "");
   return;
 #endif
+}
+
+static void
+ospf_sh_usp_lsa(struct top_hash_entry *en)
+{
+  struct ospf_lsa_ac_tlv *tlv = en->lsa_body;
+  unsigned int size = en->lsa.length - sizeof(struct ospf_lsa_header);
+  unsigned int offset = 0;
+  while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_USP)) != NULL)
+  {
+    struct ospf_lsa_ac_tlv_v_usp *usp = (struct ospf_lsa_ac_tlv_v_usp *) tlv->value;
+    ip_addr addr;
+    unsigned int len;
+    u8 pxopts;
+    u16 rest;
+
+    lsa_get_ipv6_prefix((u32 *)usp, &addr, &len, &pxopts, &rest);
+    cli_msg(-1020, "%-20R%-1I/%-15d", en->lsa.rt, addr, len);
+  }
 }
 
 void
@@ -1105,7 +1158,11 @@ ospf_sh_usp(struct proto *p)
 {
 #ifdef OSPFv3
   struct proto_ospf *po = (struct proto_ospf *) p;
-  struct prefix_node *n;
+  struct ospf_area *oa;
+  //struct prefix_node *n;
+  //unsigned int num = po->gr->hash_entries;
+  //struct top_hash_entry *hea[num];
+  struct top_hash_entry *en;
 
   if (p->proto_state != PS_UP)
   {
@@ -1113,12 +1170,31 @@ ospf_sh_usp(struct proto *p)
     cli_msg(0, "");
     return;
   }
+  cli_msg(-1020, "Self-originated Usable Prefixes");
+  cli_msg(-1020, "%-20s%-39s%-15s", "Advertising Router", "Prefix", "Prefix Length");
+  WALK_LIST(oa, po->area_list)
+  {
+    en = oa->ac_lsa;
+    ospf_sh_usp_lsa(en);
+  }
+  cli_msg(-1020, "");
 
-  cli_msg(-1020, "%-39s%-s", "Prefix", "Prefix Length");
-  WALK_LIST(n,po->usp_list)
+  cli_msg(-1020, "Other Usable Prefixes");
+  cli_msg(-1020, "%-20s%-39s%-15s", "Advertising Router", "Prefix", "Prefix Length");
+  WALK_SLIST(en, po->lsal)
+  {
+    if(en->lsa.type == LSA_T_AC && en->lsa.rt != po->router_id)
+    {
+      ospf_sh_usp_lsa(en);
+    }
+  }
+
+  /* for debugging purposes: show our own usp_list */
+  /*WALK_LIST(n,po->usp_list)
   {
     cli_msg(-1020, "%-1I/%-12d", n->px.addr, n->px.len);
-  }
+  }*/
+
   cli_msg(0, "");
   return;
 #else /* OSPFv2 */

@@ -32,20 +32,20 @@
  * Updates @offset to point to the next TLV, or to after the last TLV if
  * there are no more TLVs of the specified type.
  */
-static void *
+void *
 find_next_tlv(struct ospf_lsa_ac *lsa, int *offset, unsigned int size, u8 type)
 {
   unsigned int bound = size - 4;
   int old_offset;
 
   u8 *tlv = (u8 *) lsa;
-  do {
+  while(*offset <= bound)
+  {
     old_offset = *offset;
     *offset += LSA_AC_TLV_SPACE(((struct ospf_lsa_ac_tlv *)(tlv + *offset))->length);
     if(((struct ospf_lsa_ac_tlv *)(tlv + old_offset))->type == type)
       return tlv + old_offset;
   }
-  while (*offset <= bound);
 
   return NULL;
 }
@@ -134,6 +134,44 @@ in_use(struct prefix *px, list used)
 }
 
 /**
+ * next_prefix - Increment prefix to next non-covered prefix
+ * @pxa: The prefix to increment
+ * @pxb: The covering prefix
+ *
+ * This function calculates the smallest prefix of length
+ * @pxa->length that is not covered by @pxb, and stores it in
+ * @pxa. If there is no such prefix, stores IPA_NONE in @pxa->addr.
+ */
+static void
+next_prefix(struct prefix *pxa, struct prefix *pxb)
+{
+  unsigned int i = (pxb->len - 1) / 32;
+  u64 add; //hack, need a better way to detect overflow
+
+  add = ((u64) pxb->addr.addr[i]) + (0x80000000 >> ((pxb->len -1) % 32));
+  if(add < 0xFFFFFFFF)
+  {
+    pxa->addr.addr[i]  = (u32) add;
+    pxa->addr = ipa_and(pxa->addr, ipa_mkmask(pxb->len));
+    return;
+  }
+
+  pxa->addr.addr[i--] = 0x00000000;
+  while(i >= 0)
+  {
+    add = ((u64) pxb->addr.addr[i]) + 0x00000001;
+    if(add < 0xFFFFFFFF)
+    {
+      pxa->addr.addr[i]  = (u32) add;
+      pxa->addr = ipa_and(pxa->addr, ipa_mkmask(pxb->len));
+      return;
+    }
+    pxa->addr.addr[i--] = 0x00000000;
+  }
+
+  pxa->addr = IPA_NONE;
+}
+/**
  * choose_prefix - Choose a prefix of specified length from
  * a usable prefix and a list of sub-prefixes in use
  * @pxu: The usable prefix
@@ -150,15 +188,50 @@ choose_prefix(struct prefix *pxu, struct prefix *px, list used)
 {
   /* (Stupid) Algorithm:
      - try a random prefix until success or 10 attempts have passed
-     - if failure, increment the last prefix attempted until success,
-       or until we realize there are no available prefixes */
+     - if failure, do:
+       * set looped to 0
+       * store prefix in start_prefix
+       * while looped is 0 or prefix is strictly smaller than start_prefix, do:
+         * find one of the used prefixes which contains this prefix
+         * increment prefix to the first prefix of correct length that
+           is not covered by that used prefix
+         * if prefix is no longer in usable prefix range, set to
+           lowest prefix of range and set looped to 1
+         * if prefix is available, return */
+  struct prefix_node *n;
+  int looped;
+  struct prefix start_prefix;
+
   int i;
   for(i=0;i<10;i++){
     random_prefix(pxu, px);
     if(!in_use(px, used))
       return PXCHOOSE_SUCCESS;
   }
-  // TODO
+
+  looped = 0;
+  start_prefix = *px;
+  while(looped == 0 || ipa_compare(px->addr, start_prefix.addr) < 0)
+  {
+    WALK_LIST(n, used)
+    {
+      if(net_in_net(px->addr, px->len, n->px.addr, n->px.len))
+      {
+        next_prefix(px, &n->px);
+        break;
+      }
+    }
+
+    if(!net_in_net(px->addr, px->len, pxu->addr, pxu->len))
+    {
+      px->addr = pxu->addr;
+      looped = 1;
+    }
+
+    if(!in_use(px, used))
+      return PXCHOOSE_SUCCESS;
+  }
+
   return PXCHOOSE_FAILURE;
 }
 
