@@ -259,22 +259,13 @@ struct proto *proto_get_named(struct symbol *, struct protocol *);
 static inline u32
 proto_get_router_id(struct proto_config *pc)
 {
-  u32 ret;
-  if(pc->rid_is_random)
-  {
-    do {
-        ret = random_u32();
-      } while (ret == 0);
-    return ret;
-  }
-
-  return pc->router_id ? pc->router_id : pc->global->router_id;
+  return pc->router_id;
 }
 
 static inline byte
 proto_get_rid_is_random(struct proto_config *pc)
 {
-  return pc->rid_is_random ? pc->rid_is_random : (pc->router_id ? 0 : pc->global->rid_is_random);
+  return pc->rid_is_random;
 }
 
 extern list active_proto_list;

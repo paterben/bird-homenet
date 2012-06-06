@@ -372,9 +372,42 @@ proto_init(struct proto_config *c)
 
 int proto_reconfig_type;  /* Hack to propagate type info to pipe reconfigure hook */
 
+/** proto_set_rid - update router_id and rid_is_random fields of a proto_config
+ * @oc: old configuration
+ * @nc: new configuration to be updated
+ *
+ * Compares @oc, @nc and @nc->global router_id and rid_is_random fields and updates
+ * the fields of @nc.
+ * @nc->global fields are used only if @nc fields are not set (both 0).
+ * If configuration is the same as @oc, keep old RID values.
+ */
+static void
+proto_set_rid(struct proto_config *oc, struct proto_config *nc)
+{
+  if(nc->router_id)
+    return;
+
+  if(nc->rid_is_random)
+  {
+    if(oc && oc->rid_is_random)
+    {
+      nc->router_id = oc->router_id;
+      return;
+    }
+    do {
+        nc->router_id = random_u32();
+      } while (nc->router_id == 0);
+    return;
+  }
+
+  nc->router_id = nc->global->router_id;
+  nc->rid_is_random = nc->global->rid_is_random;
+}
+
 static int
 proto_reconfigure(struct proto *p, struct proto_config *oc, struct proto_config *nc, int type)
 {
+
   /* If the protocol is DOWN, we just restart it */
   if (p->proto_state == PS_DOWN)
     return 0;
@@ -501,6 +534,9 @@ protos_commit(struct config *new, struct config *old, int force_reconfig, int ty
 	      nc = sym->def;
 	      nc->proto = p;
 
+              /* Set oc-dependent configuration information in nc */
+              proto_set_rid(oc, nc);
+
 	      /* We will try to reconfigure protocol p */
 	      if (! force_reconfig && proto_reconfigure(p, oc, nc, type))
 		continue;
@@ -537,6 +573,8 @@ protos_commit(struct config *new, struct config *old, int force_reconfig, int ty
       {
 	if (old_config)		/* Not a first-time configuration */
 	  log(L_INFO "Adding protocol %s", nc->name);
+        else                    /* first-time configuration */
+          proto_set_rid(NULL, nc);
 	proto_init(nc);
       }
   DBG("\tdone\n");

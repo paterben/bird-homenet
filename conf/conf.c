@@ -179,16 +179,16 @@ config_del_obstacle(struct config *c)
 static int
 global_commit(struct config *new, struct config *old)
 {
-  if (!old)
+  // we generate a new random RID only if old configuration wasn't already random
+  if(new->rid_is_random && (!old || !old->rid_is_random))
   {
-    if(new->rid_is_random)
-    {
-      do {
-        new->router_id = random_u32();
-      } while (new->router_id == 0);
-    }
-    return 0;
+    do {
+      new->router_id = random_u32();
+    } while (new->router_id == 0);
   }
+
+  if (!old)
+    return 0;
 
   if (!ipa_equal(old->listen_bgp_addr, new->listen_bgp_addr) ||
       (old->listen_bgp_port != new->listen_bgp_port) ||
