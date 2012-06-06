@@ -236,16 +236,11 @@ ospf_start(struct proto *p)
   struct ospf_area_config *ac;
   struct prefix_node *n;
 
-  /* initialize RID */
+  /* initialize RID:
+     - if no protocol-specific configuration exists, use global configuration
+     - else, use protocol-specific configuration */
   po->rid_is_random = proto_get_rid_is_random(p->cf);
-  if(po->rid_is_random)
-  {
-    do {
-      po->router_id = random_u32();
-    } while (po->router_id == 0);
-  }
-  else
-    po->router_id = proto_get_router_id(p->cf);
+  po->router_id = proto_get_router_id(p->cf);
 
   po->rfc1583 = c->rfc1583;
 #ifdef OSPFv3
