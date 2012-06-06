@@ -15,9 +15,10 @@ CF_DECLS
 
 CF_KEYWORDS(LOG, SYSLOG, ALL, DEBUG, TRACE, INFO, REMOTE, WARNING, ERROR, AUTH, FATAL, BUG, STDERR, SOFT)
 CF_KEYWORDS(TIMEFORMAT, ISO, SHORT, LONG, BASE, NAME)
+CF_KEYWORDS(REMEMBER)
 
 %type <i> log_mask log_mask_list log_cat
-%type <g> log_file
+%type <g> log_file rid_file
 %type <t> cfg_name
 %type <tf> timeformat_which
 %type <t> syslog_name
@@ -71,6 +72,21 @@ log_cat:
  | BUG { $$ = L_BUG[0]; }
  ;
 
+CF_ADDTO(conf, remember_rid)
+
+remember_rid: ROUTER ID REMEMBER rid_file ';'
+ {
+  new_config->rid_file = $4;
+ }
+;
+
+rid_file: TEXT
+ {
+  FILE *f = tracked_fopen(new_config->pool, $1, "r+");
+  if (!f) cf_error("Unable to open router ID file `%s': %m", $1);
+  $$ = f;
+ }
+;
 
 CF_ADDTO(conf, mrtdump_base)
 

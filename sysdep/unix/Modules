@@ -1,4 +1,5 @@
 log.c
+routerid.c
 main.c
 timer.h
 io.c

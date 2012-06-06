@@ -185,6 +185,7 @@ global_commit(struct config *new, struct config *old)
     do {
       new->router_id = random_u32();
     } while (new->router_id == 0);
+    write_rid(new->rid_file, new->router_id);
   }
 
   if (!old)

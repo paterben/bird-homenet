@@ -84,6 +84,10 @@ void debug(char *msg, ...);		/* Printf to debug output */
 #define ASSERT(x) do { } while(0)
 #endif
 
+/* Writing to RID file */
+void write_rid(void *f, u32 rid);
+u32 read_rid(void *f);
+
 /* Pseudorandom numbers */
 
 u32 random_u32(void);
