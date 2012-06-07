@@ -3,6 +3,7 @@ log stderr all;
 log "bird6.log" all;
 
 router id random; # can be overridden by specific protocols
+router id remember "router_id";
 
 debug protocols {states, routes, filters, interfaces, events, packets};
 
@@ -20,7 +21,6 @@ protocol static {
 }
 
 protocol ospf MyOSPF {
-	router id 10.2.1.1;
 	prefix assignment yes;
 	duplicate rid detection yes { };
 	usableprefix {
