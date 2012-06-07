@@ -17,9 +17,12 @@
  */
 
 #include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include "nest/bird.h"
 #include "lib/string.h"
 
+#define STD_RID_P_LENGTH 15
 #define RID_BUFFER_SIZE 100
 static char rid_buffer[RID_BUFFER_SIZE];
 static char *rid_buffer_pos;
@@ -53,7 +56,6 @@ rid_commit(void *f)
   if (f)
   {
     fputs(rid_buffer, f);
-    fputc('\n', f);
     fflush(f);
   }
 
@@ -102,8 +104,15 @@ ridn(char *msg, ...)
 
 u32 read_rid(void *f)
 {
-  //TODO;
-  return 0;
+  u32 ret = 0;
+  char buf[STD_RID_P_LENGTH + 1];
+  if(fgets(buf, STD_RID_P_LENGTH + 1, f))
+  {
+    if(!ipv4_pton_u32(buf, &ret))
+      ret = 0;
+  }
+  fseek(f, 0L, SEEK_SET);
+  return ret;
 }
 
 void write_rid(void *f, u32 rid)
@@ -111,4 +120,11 @@ void write_rid(void *f, u32 rid)
   rid_reset();
   ridn("%R", rid);
   rid_commit(f);
+  int fd = fileno(f);
+  if(fd)
+  {
+    int a = ftell(f);
+    ftruncate(fd, a);
+    fseek(f, 0L, SEEK_SET);
+  }
 }

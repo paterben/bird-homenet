@@ -176,17 +176,41 @@ config_del_obstacle(struct config *c)
     }
 }
 
+static void
+global_set_rid(struct config *new, struct config *old)
+{
+  /* random router ID generation happens if:
+     - we are configured to generate a random RID
+     AND
+     - there is no value stored in memory or we are set to not look at memory
+     AND
+     - this is a first time configuration or old config wasn't random */
+  if(new->rid_is_random && (!old || !old->rid_is_random))
+  {
+    u32 rid;
+    if(new->rid_file && (rid = read_rid(new->rid_file)))
+    {
+      new->router_id = rid;
+    }
+    else
+    {
+      do {
+        new->router_id = random_u32();
+      } while (new->router_id == 0);
+    }
+  }
+
+  if (!new->router_id)
+    new->router_id = old->router_id;
+
+  if(new->rid_file)
+    write_rid(new->rid_file, new->router_id);
+}
+
 static int
 global_commit(struct config *new, struct config *old)
 {
-  // we generate a new random RID only if old configuration wasn't already random
-  if(new->rid_is_random && (!old || !old->rid_is_random))
-  {
-    do {
-      new->router_id = random_u32();
-    } while (new->router_id == 0);
-    write_rid(new->rid_file, new->router_id);
-  }
+  global_set_rid(new, old);
 
   if (!old)
     return 0;
@@ -196,8 +220,6 @@ global_commit(struct config *new, struct config *old)
       (old->listen_bgp_flags != new->listen_bgp_flags))
     log(L_WARN "Reconfiguration of BGP listening socket not implemented, please restart BIRD.");
 
-  if (!new->router_id)
-    new->router_id = old->router_id;
   if (new->router_id != old->router_id)
     return 1;
   return 0;
