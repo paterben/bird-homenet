@@ -13,6 +13,5 @@
 /config.status
 /obj
 
-# ignore files created by autoconf
+# ignore files created by autoconf, except configure
 /autom4te.cache
-/configure
