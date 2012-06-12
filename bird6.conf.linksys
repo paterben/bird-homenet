@@ -1,9 +1,9 @@
 #log syslog { debug, trace, info, remote, warning, error, auth, fatal, bug };
 log stderr all;
-log "bird6.log" all;
+log "/tmp/bird6.log" all;
 
 router id random; # can be overridden by specific protocols
-router id remember "router_id";
+router id remember "/etc/router_id";
 
 debug protocols {states, routes, filters, interfaces, events, packets};
 
