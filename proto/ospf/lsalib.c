@@ -630,7 +630,8 @@ lsa_install_new(struct proto_ospf *po, struct ospf_lsa_header *lsa, u32 domain, 
   if (change)
   {
     schedule_rtcalc(po);
-    schedule_pxassign(po);
+    if(po->pxassignment)
+      schedule_pxassign(po);
   }
 
   return en;

@@ -1201,7 +1201,8 @@ ospf_sh_usp(struct proto *p)
   WALK_LIST(oa, po->area_list)
   {
     en = oa->ac_lsa;
-    ospf_sh_usp_lsa(en);
+    if(en)
+      ospf_sh_usp_lsa(en);
   }
   cli_msg(-1020, "");
 

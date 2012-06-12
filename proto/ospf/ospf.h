@@ -906,7 +906,7 @@ struct proto_ospf
   byte rfc1583;			/* RFC1583 compatibility */
 #ifdef OSPFv3
   byte dridd;                   /* Is duplicate RID detection enabled? */
-  byte pxassignment;            /* Is prefix assignment enables? */
+  byte pxassignment;            /* Is prefix assignment enabled? */
   byte pxassign;                /* Prefix assignment scheduled? */
   list usp_list;                /* list of struct prefix_node.
                                    Usable Prefixes to be placed in our own AC LSAs */
