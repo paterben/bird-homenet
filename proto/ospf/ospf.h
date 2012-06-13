@@ -247,6 +247,9 @@ struct ospf_iface
   list asp_list;                /* list of struct prefix_node.
                                    List of prefixes that have been assigned to this interface
                                    by us from a usable prefix */
+  list asp_list_noresp;         /* list of struct prefix_node.
+                                   List of prefixes that have been assigned to this interface by another router
+                                   on the link. */
   list usp_list;                /* list of struct ospf_usp.
                                    Each node corresponds to one Usable Prefix learned via OSPF,
                                    a pointer to the current interface and a timer for prefix assignment.
