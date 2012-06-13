@@ -501,7 +501,10 @@ pxassign_file: TEXT
 #ifdef OSPFv3
   /* no pool available, we will call track_file during ospf_start */
   FILE *f = fopen($1, "r+");
-  if (!f) cf_error("Unable to open prefix assignment file `%s': %m", $1);
+  if (!f)
+    f = fopen($1, "w+");
+  if (!f)
+    cf_error("Unable to open prefix assignment file `%s': %m", $1);
   $$ = f;
 #else /*OSPFv2 */
   cf_error( "Prefix assignment can only be used with IPv6");
