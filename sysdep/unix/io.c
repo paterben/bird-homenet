@@ -87,12 +87,18 @@ tracked_fopen(pool *p, char *name, char *mode)
 {
   FILE *f = fopen(name, mode);
 
-  if (f)
-    {
-      struct rfile *r = ralloc(p, &rf_class);
-      r->f = f;
-    }
+  track_file(p, f);
   return f;
+}
+
+void
+track_file(pool *p, void *f)
+{
+  if (f)
+  {
+    struct rfile *r = ralloc(p, &rf_class);
+    r->f = f;
+  }
 }
 
 /**
@@ -762,7 +768,7 @@ sk_set_ttl_int(sock *s)
   int one = 1;
   if (s->ttl == 1 && setsockopt(s->fd, SOL_SOCKET, SO_DONTROUTE, &one, sizeof(one)) < 0)
     return "SO_DONTROUTE";
-#endif 
+#endif
 #endif
   return NULL;
 }
@@ -805,7 +811,7 @@ bad:
  * @ttl: TTL value
  *
  * Set TTL for already opened connections when TTL was not set before.
- * Useful for accepted connections when different ones should have 
+ * Useful for accepted connections when different ones should have
  * different TTL.
  *
  * Result: 0 for success, -1 for an error.
@@ -972,7 +978,7 @@ int
 sk_leave_group(sock *s, ip_addr maddr)
 {
   struct ipv6_mreq mreq;
-	
+
   set_inaddr(&mreq.ipv6mr_multiaddr, maddr);
 
 #ifdef CONFIG_IPV6_GLIBC_20
@@ -1036,7 +1042,7 @@ sk_leave_group(sock *s, ip_addr maddr)
   return 0;
 }
 
-#endif 
+#endif
 
 
 static void
@@ -1327,7 +1333,7 @@ sk_rx_ready(sock *s)
 
  redo:
   rv = select(s->fd+1, &rd, &wr, NULL, &timo);
-  
+
   if ((rv < 0) && (errno == EINTR || errno == EAGAIN))
     goto redo;
 

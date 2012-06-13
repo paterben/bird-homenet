@@ -83,7 +83,10 @@ remember_rid: ROUTER ID REMEMBER rid_file ';'
 rid_file: TEXT
  {
   FILE *f = tracked_fopen(new_config->pool, $1, "r+");
-  if (!f) cf_error("Unable to open router ID file `%s': %m", $1);
+  if (!f)
+    f = tracked_fopen(new_config->pool, $1, "w+");
+  if (!f)
+    cf_error("Unable to open router ID file `%s': %m", $1);
   $$ = f;
  }
 ;

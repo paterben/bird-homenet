@@ -56,6 +56,7 @@ rid_commit(void *f)
   if (f)
   {
     fputs(rid_buffer, f);
+    fputc('\n', f);
     fflush(f);
   }
 
@@ -105,9 +106,14 @@ ridn(char *msg, ...)
 u32 read_rid(void *f)
 {
   u32 ret = 0;
+  char *pos;
   char buf[STD_RID_P_LENGTH + 1];
   if(fgets(buf, STD_RID_P_LENGTH + 1, f))
   {
+    /* get rid of trailing newline */
+    if ((pos=strchr(buf, '\n')) != NULL)
+      *pos = '\0';
+
     if(!ipv4_pton_u32(buf, &ret))
       ret = 0;
   }

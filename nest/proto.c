@@ -573,8 +573,7 @@ protos_commit(struct config *new, struct config *old, int force_reconfig, int ty
       {
 	if (old_config)		/* Not a first-time configuration */
 	  log(L_INFO "Adding protocol %s", nc->name);
-        else                    /* first-time configuration */
-          proto_set_rid(NULL, nc);
+        proto_set_rid(NULL, nc);
 	proto_init(nc);
       }
   DBG("\tdone\n");

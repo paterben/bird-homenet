@@ -212,6 +212,7 @@ CF_KEYWORDS(DUPLICATE, RID, DETECTION, USABLEPREFIX, ASSIGNMENT)
 
 %type <t> opttext
 %type <ld> lsadb_args
+%type <g> pxassign_file
 
 CF_GRAMMAR
 
@@ -230,6 +231,7 @@ ospf_proto_item:
  | RFC1583COMPAT bool { OSPF_CFG->rfc1583 = $2; }
  | ospf_dridd
  | ospf_pxassignment
+ | remember_pxassign
  | ospf_usp
  | ECMP bool { OSPF_CFG->ecmp = $2 ? DEFAULT_ECMP_LIMIT : 0; }
  | ECMP bool LIMIT expr { OSPF_CFG->ecmp = $2 ? $4 : 0; if ($4 < 0) cf_error("ECMP limit cannot be negative"); }
@@ -486,6 +488,25 @@ ospf_pxassignment_opts:
 
 ospf_pxassignment_item:
   /* empty for the moment */
+;
+
+remember_pxassign: PREFIX ASSIGNMENT REMEMBER pxassign_file
+ {
+  OSPF_CFG->pxassign_file = $4;
+ }
+;
+
+pxassign_file: TEXT
+ {
+#ifdef OSPFv3
+  /* no pool available, we will call track_file during ospf_start */
+  FILE *f = fopen($1, "r+");
+  if (!f) cf_error("Unable to open prefix assignment file `%s': %m", $1);
+  $$ = f;
+#else /*OSPFv2 */
+  cf_error( "Prefix assignment can only be used with IPv6");
+#endif
+ }
 ;
 
 ospf_dridd:

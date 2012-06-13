@@ -91,6 +91,7 @@ struct ospf_config
 #ifdef OSPFv3
   byte dridd;                   /* Is duplicate RID detection enabled? */
   byte pxassignment;            /* Is prefix assignment enabled? */
+  void *pxassign_file;          /* File to keep track of assigned prefixes */
   list usp_list;                /* list of struct prefix_node.
                                    Usable Prefixes to be placed in our own AC LSAs */
 #endif
@@ -912,6 +913,7 @@ struct proto_ospf
                                    Usable Prefixes to be placed in our own AC LSAs */
   /*list asp_list;*/                /* List of prefixes that have been
                                    assigned to an interface in the OSPF network */
+  void *pxassign_file;          /* File to keep track of assigned prefixes */
 #endif
   byte ebit;			/* Did I originate any ext lsa? */
   byte ecmp;			/* Maximal number of nexthops in ECMP route, or 0 */

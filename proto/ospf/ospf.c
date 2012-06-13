@@ -101,7 +101,7 @@
 
 #include <stdlib.h>
 #include "ospf.h"
-
+#include "lib/unix.h"
 
 static int ospf_reload_routes(struct proto *p);
 static void ospf_rt_notify(struct proto *p, struct rtable *table UNUSED, net * n, rte * new, rte * old UNUSED, ea_list * attrs);
@@ -244,6 +244,9 @@ ospf_start(struct proto *p)
 #ifdef OSPFv3
   po->dridd = c->dridd;
   po->pxassignment = c->pxassignment;
+  po->pxassign_file = c->pxassign_file;
+  if(po->pxassign_file)
+    track_file(p->pool, po->pxassign_file);
   if(!po->dridd && po->rid_is_random)
     log(L_WARN "%s: Duplicate RID detection should be enabled when using a randomly generated RID", p->name);
   po->rhwf = mb_alloc(p->pool, sizeof(struct ospf_rhwf)); /* TODO get size of allocation from lower layer */
