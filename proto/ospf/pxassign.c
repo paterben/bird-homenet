@@ -89,26 +89,6 @@ assignment_exists_resp(struct ospf_iface *ifa, struct prefix *px)
 }
 
 /**
- * find_asp_in_usp - Parse a list of prefixes to find one covered by a specific prefix
- * @asp: a list of prefixes to search in
- * @usp: a prefix
- *
- * Returns a node in the list that is covered by @usp, or NULL if there is no such node.
- */
-static struct prefix_node *
-find_asp_in_usp(list asp, struct prefix *usp)
-{
-  struct prefix_node *aspn;
-
-  WALK_LIST(aspn, asp)
-  {
-    if(net_in_net(aspn->px.addr, aspn->px.len, usp->addr, usp->len))
-      return aspn;
-  }
-  return NULL;
-}
-
-/**
  * random_prefix - Select a random sub-prefix of specified length
  * @px: A pointer to the prefix
  * @pxsub: A pointer to the sub-prefix. Length field must be set.
@@ -419,36 +399,38 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
     }
     if(assignment_found)
     {
-      struct prefix px;
-      px.addr = usp_addr;
-      px.len = usp_len;
+      //struct prefix px;
+      //px.addr = usp_addr;
+      //px.len = usp_len;
       int found = 0; // whether assignment is already in the ifa's asp_list
       int change = 0; // whether we must reoriginate our AC LSA
       WALK_LIST(ifa2, po->iface_list)
       {
-        while(n = find_asp_in_usp(ifa2->asp_list, &px))
+        WALK_LIST(n,ifa2->asp_list)
         {
-          /* search for self-assigned prefixes from this usp, delete them and re-originate AC LSA */
-          if(n->rid == po->router_id)
+          if(net_in_net(n->px.addr, n->px.len, usp_addr, usp_len))
           {
-            change = 1;
-            rem_node(&n->n);
-            mb_free(n);
-            // FIXME timeout address?
-          }
+            /* search for self-assigned prefixes from this usp, delete them and re-originate AC LSA */
+            if(n->rid == po->router_id)
+            {
+              change = 1;
+              rem_node(&n->n);
+              mb_free(n);
+              // FIXME timeout address?
+            }
 
-          /* search for non-self-assigned prefixes from this usp, delete them if different from
-             the assignment we have found */
-          if(n->rid != po->router_id &&
-             (!ipa_equal(n->px.addr, neigh_r_addr) || n->px.len != neigh_r_len || ifa != ifa2))
-          {
-            rem_node(&n->n);
-            mb_free(n);
-            // FIXME timeout address?
+            /* search for non-self-assigned prefixes from this usp, delete them if different from
+               the assignment we have found */
+            if(n->rid != po->router_id &&
+               (!ipa_equal(n->px.addr, neigh_r_addr) || n->px.len != neigh_r_len || ifa != ifa2))
+            {
+              rem_node(&n->n);
+              mb_free(n);
+              // FIXME timeout address?
+            }
+            else
+              found = 1;
           }
-          else
-            found = 1;
-
         }
       }
       if(!found)
