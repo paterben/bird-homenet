@@ -1490,18 +1490,22 @@ add_asp_tlvs(struct proto_ospf *po)
   struct prefix_node *n;
   //int offset;
 
-    // Add all prefixes from asp_lists of all interfaces
+  // Add all self-responsible prefixes from asp_lists of all interfaces
   WALK_LIST(ifa, po->iface_list)
   {
     WALK_LIST(n, ifa->asp_list)
     {
-      //offset = po->lsab_used;
-      asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
-      asp->type = LSA_AC_TLV_T_ASP;
-      memcpy(lsab_alloc(po, sizeof(u32)), &ifa->iface->index, sizeof(u32));
-      lsa_put_prefix(po, n->px.addr, n->px.len, 0);
-      //asp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
-      asp->length = IPV6_PREFIX_SPACE_NOPAD(n->px.len) + sizeof(u32);
+      /* only advertise prefixes for which we are responsible */
+      if(n->rid == po->router_id)
+      {
+        //offset = po->lsab_used;
+        asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
+        asp->type = LSA_AC_TLV_T_ASP;
+        memcpy(lsab_alloc(po, sizeof(u32)), &ifa->iface->index, sizeof(u32));
+        lsa_put_prefix(po, n->px.addr, n->px.len, 0);
+        //asp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
+        asp->length = IPV6_PREFIX_SPACE_NOPAD(n->px.len) + sizeof(u32);
+      }
     }
   }
 }
