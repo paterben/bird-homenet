@@ -425,15 +425,17 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
 
             /* search for non-self-assigned prefixes from this usp, delete them if different from
                the assignment we have found */
-            if(n->rid != po->router_id &&
-               (!ipa_equal(n->px.addr, neigh_r_addr) || n->px.len != neigh_r_len || ifa != ifa2))
+            if(n->rid != po->router_id)
             {
-              rem_node(&n->n);
-              mb_free(n);
-              // FIXME timeout address?
+              if(!ipa_equal(n->px.addr, neigh_r_addr) || n->px.len != neigh_r_len || ifa != ifa2)
+              {
+                rem_node(&n->n);
+                mb_free(n);
+                // FIXME timeout address?
+              }
+              else
+                found = 1;
             }
-            else
-              found = 1;
           }
         }
       }
