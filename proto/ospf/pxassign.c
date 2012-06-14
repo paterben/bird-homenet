@@ -349,23 +349,12 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
       continue; // next step will be 5.3.5
     }
 
-    /* 5.3.2bis */
-    /* FIXME this step doesn't exist in algorithm */
-    if(is_highest_rid(ifa))
-    {
-      struct prefix px;
-      px.addr = usp_addr;
-      px.len = usp_len;
-      if(assignment_exists_resp(ifa, &px))
-        continue; // go to next interface
-    }
-
     /* 5.3.3 */
     byte assignment_found = 0;
-    u32 rid = 0;
+    u32 neigh_rid = 0;
     WALK_LIST(neigh, ifa->neigh_list)
     {
-      if(neigh->rid > rid && neigh->state >= NEIGHBOR_EXSTART) //highest rid takes precedence
+      if(neigh->rid > neigh_rid && neigh->state >= NEIGHBOR_EXSTART) //highest rid takes precedence
       {
         if((en = ospf_hash_find_router_ac_lsa_first(oa->po->gr, oa->areaid, neigh->rid)) == NULL)
           continue; /* no AC LSAs emitted by neighor, nothing to do */
@@ -387,7 +376,7 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
                    the assigned prefix and keep looking at other neighbors with higher RID */
                 neigh_r_addr = neigh_addr;
                 neigh_r_len = neigh_len;
-                rid = neigh->rid;
+                neigh_rid = neigh->rid;
                 assignment_found = 1;
               }
             }
@@ -397,6 +386,20 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
         } while((en = ospf_hash_find_router_ac_lsa_next(en)) != NULL);
       }
     }
+
+    /* 5.3.3bis */
+    /* FIXME this step doesn't exist in algorithm */
+    if(po->router_id > neigh_rid)
+    {
+      struct prefix px;
+      px.addr = usp_addr;
+      px.len = usp_len;
+      if(assignment_exists_resp(ifa, &px))
+        continue; // go to next interface
+    }
+
+    /* 5.3.3ter */
+    /* FIXME this step doesn't exist in algorithm */
     if(assignment_found)
     {
       //struct prefix px;
@@ -411,8 +414,8 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
           if(net_in_net(n->px.addr, n->px.len, usp_addr, usp_len))
           {
             /* search for self-assigned prefixes from this usp, delete the following:
-               - same assigned prefix, any interface
-               - same interface, same usable prefix
+               - same assigned prefix
+               - same interface
                if deletion, re-originate AC LSA */
             if(n->rid == po->router_id &&
                (ifa == ifa2 || (ipa_equal(n->px.addr, neigh_r_addr) && n->px.len == neigh_r_len)))
@@ -423,31 +426,48 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
               // FIXME timeout address?
             }
 
-            /* search for non-self-assigned prefixes from this usp, delete them if different from
-               the assignment we have found */
+            /* search for non-self-assigned prefixes from this usp, delete the following:
+               - same assigned prefix, different interface
+               - same assigned prefix, different router
+               - different assigned prefix, same interface */
             if(n->rid != po->router_id)
             {
-              if(!ipa_equal(n->px.addr, neigh_r_addr) || n->px.len != neigh_r_len || ifa != ifa2)
+              if(ipa_equal(n->px.addr, neigh_r_addr) && n->px.len == neigh_r_len)
               {
-                rem_node(&n->n);
-                mb_free(n);
-                // FIXME timeout address?
+                if(ifa != ifa2 || n->rid != neigh_rid)
+                {
+                  rem_node(&n->n);
+                  mb_free(n);
+                  // FIXME timeout address?
+                }
+                else
+                  found = 1;
               }
-              else
-                found = 1;
+              if((!ipa_equal(n->px.addr, neigh_r_addr) || n->px.len != neigh_r_len) && ifa == ifa2)
+              {
+                  rem_node(&n->n);
+                  mb_free(n);
+                  // FIXME timeout address?
+              }
             }
           }
         }
       }
+
+      /* 5.3.3quater */
+      /* FIXME this step doesn't exist in algorithm */
       if(!found)
       {
         pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
         pxn->px.addr = neigh_r_addr;
         pxn->px.len = neigh_r_len;
-        pxn->rid = rid;
+        pxn->rid = neigh_rid;
         add_tail(&ifa->asp_list, NODE pxn);
         // FIXME do physical prefix assignment
       }
+
+      /* 5.3.3quinquies */
+      /* FIXME this step doesn't exist in algorithm */
       if(change)
         schedule_ac_lsa(ifa->oa);
       continue; // go to next interface
