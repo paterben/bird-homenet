@@ -410,8 +410,12 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
         {
           if(net_in_net(n->px.addr, n->px.len, usp_addr, usp_len))
           {
-            /* search for self-assigned prefixes from this usp, delete them and re-originate AC LSA */
-            if(n->rid == po->router_id)
+            /* search for self-assigned prefixes from this usp, delete the following:
+               - same assigned prefix, any interface
+               - same interface, same usable prefix
+               if deletion, re-originate AC LSA */
+            if(n->rid == po->router_id &&
+               (ifa == ifa2 || (ipa_equal(n->px.addr, neigh_r_addr) && n->px.len == neigh_r_len)))
             {
               change = 1;
               rem_node(&n->n);
