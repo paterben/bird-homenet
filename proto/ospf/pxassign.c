@@ -78,10 +78,11 @@ assignment_exists_resp(struct ospf_iface *ifa, struct prefix *px)
 {
   //struct ospf_iface *ifa = usp->ifa;
   struct prefix_node *asp;
+  struct proto_ospf *po = ifa->oa->po;
 
   WALK_LIST(asp, ifa->asp_list)
   {
-    if(net_in_net(asp->px.addr, asp->px.len, px->addr, px->len))
+    if(asp->rid == po->router_id && net_in_net(asp->px.addr, asp->px.len, px->addr, px->len))
       return 1;
   }
   return 0;
@@ -421,43 +422,46 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
       struct prefix px;
       px.addr = usp_addr;
       px.len = usp_len;
-      int found = 0; // whether assignment is already in the ifa's asp_list_noresp
-
-      /* delete any self-assigned prefix covered by the usp */
+      int found = 0; // whether assignment is already in the ifa's asp_list
+      int change = 0; // whether we must reoriginate our AC LSA
       WALK_LIST(ifa2, po->iface_list)
       {
         while(n = find_asp_in_usp(ifa2->asp_list, &px))
         {
-          // FIXME timeout address?
-          rem_node(&n->n);
-          mb_free(n);
-        }
-      }
-
-      /* delete any colliding non-self-assigned asp covered by the usp */
-      WALK_LIST(ifa2, po->iface_list)
-      {
-        while(n = find_asp_in_usp(ifa2->asp_list, &px))
-        {
-          if(!ipa_equal(n->px.addr, neigh_r_addr) || n->px.len != neigh_r_len || ifa != ifa2)
+          /* search for self-assigned prefixes from this usp, delete them and re-originate AC LSA */
+          if(n->rid == po->router_id)
           {
-            // FIXME timeout address?
+            change = 1;
             rem_node(&n->n);
             mb_free(n);
+            // FIXME timeout address?
+          }
+
+          /* search for non-self-assigned prefixes from this usp, delete them if different from
+             the assignment we have found */
+          if(n->rid != po->router_id &&
+             (!ipa_equal(n->px.addr, neigh_r_addr) || n->px.len != neigh_r_len || ifa != ifa2))
+          {
+            rem_node(&n->n);
+            mb_free(n);
+            // FIXME timeout address?
           }
           else
             found = 1;
+
         }
       }
-
       if(!found)
       {
         pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
         pxn->px.addr = neigh_r_addr;
         pxn->px.len = neigh_r_len;
-        add_tail(&ifa->asp_list_noresp, NODE pxn);
+        pxn->rid = rid;
+        add_tail(&ifa->asp_list, NODE pxn);
         // FIXME do physical prefix assignment
       }
+      if(change)
+        schedule_ac_lsa(ifa->oa);
       continue; // go to next interface
     }
 
@@ -576,6 +580,7 @@ ospf_pxassign_resp(struct ospf_usp *usp)
       add_tail(&ifa->asp_list, NODE pxn);
       pxn->px.addr = px_tmp.addr;
       pxn->px.len = px_tmp.len;
+      pxn->rid = po->router_id;
 
       OSPF_TRACE(D_EVENTS, "From prefix %I/%d, chose prefix %I/%d to assign to interface %s", usp->px.addr, usp->px.len, px_tmp.addr, px_tmp.len, ifa->iface->name);
       break;

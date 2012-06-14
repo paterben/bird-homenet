@@ -1135,12 +1135,12 @@ ospf_sh_asp(struct proto *p)
     return;
   }
 
-  cli_msg(-1021, "Self-assigned prefixes (may not yet be in LSADB)");
-  cli_msg(-1021, "%-14s%-39s%-15s", "Interface", "Prefix", "Prefix Length");
+  cli_msg(-1021, "Prefixes assigned to directly connected interfaces (may not yet be in LSADB)");
+  cli_msg(-1021, "%-20s%-14s%-39s%-15s", "Advertising Router", "Interface", "Prefix", "Prefix Length");
   WALK_LIST(ifa, po->iface_list)
   {
     WALK_LIST(n, ifa->asp_list)
-      cli_msg(-1021, "%-14s%-1I/%-14d", ifa->iface->name, n->px.addr, n->px.len);
+      cli_msg(-1021, "%-20R%-14s%-1I/%-14d", n->rid, ifa->iface->name, n->px.addr, n->px.len);
   }
   cli_msg(-1021, "");
 
