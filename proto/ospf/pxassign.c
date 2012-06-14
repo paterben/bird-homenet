@@ -464,6 +464,8 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
       usp->px.len = usp_len;
 
       ospf_pxassign_resp(usp);
+      rem_node(NODE usp);
+      mb_free(usp);
     }
   }
 }
@@ -495,13 +497,14 @@ ospf_pxassign_resp(struct ospf_usp *usp)
   DBG("%s: I am responsible router for interface %d and USP %I/%d.\n",
           p->name, ifa->iface->name, usp->px.addr, usp->px.len);
 
+  init_list(&used);
+
   /* 5.3.5alpha */
   /* FIXME this step doesn't exist in algorithm */
   if(assignment_exists_resp(ifa, &usp->px))
     goto finish;
 
   /* 5.3.5a */
-  init_list(&used);
   WALK_LIST(oa, po->area_list)
   {
     if((en = ospf_hash_find_ac_lsa_first(oa->po->gr, oa->areaid)) == NULL)
@@ -580,11 +583,14 @@ ospf_pxassign_resp(struct ospf_usp *usp)
   /* when we are finished, we must remove usp from the interface's usp_list
      as well as free up the memory taken by the usp.
      If a timer was allocated, the pxassign_timer_hook function will take
-     care of freeing it.*/
+     care of freeing it.
+     We must also free up all elements from the used list. */
   finish:
-  rem_node(NODE usp);
-  mb_free(usp);
-
+  WALK_LIST_DELSAFE(n, pxn, used)
+  {
+    rem_node(NODE n);
+    mb_free(n);
+  }
 }
 
 void
@@ -593,7 +599,8 @@ pxassign_timer_hook(timer *timer)
   struct ospf_usp *usp = (struct ospf_usp *) timer->data;
 
   ospf_pxassign_resp(usp);
-
+  rem_node(NODE usp);
+  mb_free(usp);
   rfree(timer);
 }
 #endif /* OSPFv3 */
