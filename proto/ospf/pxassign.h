@@ -26,6 +26,9 @@ struct ospf_usp /* (timer, interface, usable prefix) tuple */
   struct ospf_iface *ifa;
 };
 
+void ospf_pxcr(struct proto_ospf *po);
+int ospf_pxcr_area(struct ospf_area *oa);
+int ospf_pxcr_asp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_asp *asp, u32 rid);
 void ospf_pxassign(struct proto_ospf *po);
 void ospf_pxassign_area(struct ospf_area *oa);
 void ospf_pxassign_resp(struct ospf_usp *usp);

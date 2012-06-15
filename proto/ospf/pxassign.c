@@ -240,6 +240,89 @@ choose_prefix(struct prefix *pxu, struct prefix *px, list used)
 }
 
 void
+ospf_pxcr(struct proto_ospf *po)
+{
+  struct proto *p = &po->proto;
+  struct ospf_area *oa;
+
+  OSPF_TRACE(D_EVENTS, "Starting prefix collision recovery algorithm");
+
+  WALK_LIST(oa, po->area_list)
+  {
+    // prefix collision recovery algorithm
+    int change = ospf_pxcr_area(oa);
+    if(change)
+      schedule_ac_lsa(oa);
+  }
+}
+
+int
+ospf_pxcr_area(struct ospf_area *oa)
+{
+  //struct proto *p = &oa->po->proto;
+  struct top_hash_entry *en;
+  struct ospf_lsa_ac_tlv *tlv;
+  unsigned int offset;
+  unsigned int size;
+  int change = 0;
+
+  if((en = ospf_hash_find_ac_lsa_first(oa->po->gr, oa->areaid)) == NULL)
+    return 0; /* no LSAs in this area, nothing to do */
+
+  do {
+    size = en->lsa.length - sizeof(struct ospf_lsa_header);
+    offset = 0;
+    while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_ASP)) != NULL)
+    {
+      change |= ospf_pxcr_asp(oa, (struct ospf_lsa_ac_tlv_v_asp *)(tlv->value), en->lsa.rt);
+    }
+  } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
+
+  return change;
+}
+
+int
+ospf_pxcr_asp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_asp *casp, u32 rid)
+{
+  struct proto_ospf *po = oa->po;
+  struct ospf_iface *ifa;
+  struct prefix_node *pxn;
+  ip_addr casp_addr;
+  unsigned int casp_len;
+  u8 casp_pxopts;
+  u16 casp_rest;
+  int change;
+
+  lsa_get_ipv6_prefix((u32 *)casp, &casp_addr, &casp_len, &casp_pxopts, &casp_rest);
+
+  WALK_LIST(ifa, po->iface_list)
+  {
+    if(ifa->oa == oa)
+    {
+      WALK_LIST(pxn, ifa->asp_list)
+      {
+        /* 5.4.1 */
+        if(rid == po->router_id)
+          return 0;
+
+        /* 5.4.2 */
+        if(pxn->rid != po->router_id)
+          continue;
+
+        /* 5.4.3 */
+        if(ipa_equal(casp_addr, pxn->px.addr) && casp_len == pxn->px.len && rid > po->router_id)
+        {
+          rem_node(&pxn->n);
+          mb_free(pxn);
+          change = 1;
+        }
+      }
+    }
+  }
+  return change;
+}
+
+void
 ospf_pxassign(struct proto_ospf *po)
 {
   struct proto *p = &po->proto;
@@ -248,9 +331,10 @@ ospf_pxassign(struct proto_ospf *po)
   OSPF_TRACE(D_EVENTS, "Starting prefix assignment algorithm");
 
   WALK_LIST(oa, po->area_list)
+  {
+    // prefix assignment algorithm
     ospf_pxassign_area(oa);
-
-  po->pxassign = 0;
+  }
 }
 
 /**
