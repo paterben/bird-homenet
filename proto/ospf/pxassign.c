@@ -293,7 +293,7 @@ ospf_pxcr_asp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_asp *casp, u32 rid)
   u16 casp_rest;
   int change;
 
-  lsa_get_ipv6_prefix((u32 *)casp, &casp_addr, &casp_len, &casp_pxopts, &casp_rest);
+  lsa_get_ipv6_prefix((u32 *)(casp) + 1, &casp_addr, &casp_len, &casp_pxopts, &casp_rest);
 
   WALK_LIST(ifa, po->iface_list)
   {
