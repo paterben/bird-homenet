@@ -25,7 +25,7 @@ get_dhcpv6_usable_prefix(struct proto_ospf *po)
   char *pos;
 
   syscfg_init();
-  syscfg_get("ipv6_delegated_prefix", usable_prefix, USABLE_PREFIX_LENGTH);
+  syscfg_get(NULL, "ipv6_delegated_prefix", usable_prefix, USABLE_PREFIX_LENGTH);
 
   if ((pos=strchr(usable_prefix, '/')) != NULL)
   {
