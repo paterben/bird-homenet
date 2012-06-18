@@ -169,7 +169,7 @@ ospf_usp_finish(void)
 }
 
 static void
-ospf_usp_add(struct prefix px)
+ospf_usp_add_manual(struct prefix px)
 {
   if(px.len < LSA_AC_USP_MIN_PREFIX_LENGTH || px.len > LSA_AC_USP_MAX_PREFIX_LENGTH)
     cf_error( "Usable prefixes must be longer than LSA_AC_USP_MIN_PREFIX_LENGTH \
@@ -178,6 +178,7 @@ ospf_usp_add(struct prefix px)
   add_tail(&OSPF_CFG->usp_list, NODE this_usp);
   this_usp->px.addr = px.addr;
   this_usp->px.len = px.len;
+  this_usp->type = OSPF_USP_T_MANUAL;
 }
 
 static inline void
@@ -545,7 +546,7 @@ ospf_usp_opts:
  | ospf_usp_item ospf_usp_opts
  ;
 
-ospf_usp_item: prefix ';' { ospf_usp_add($1); }
+ospf_usp_item: prefix ';' { ospf_usp_add_manual($1); }
 ;
 
 opttext:

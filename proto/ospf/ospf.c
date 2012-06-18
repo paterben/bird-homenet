@@ -519,6 +519,9 @@ area_disp(struct ospf_area *oa)
       update_net_lsa(ifa);
   }
 #ifdef OSPFv3
+
+  /* Update list of usable prefixes */
+
   /* Now try to originate AC LSAs */
   if (oa->origac)
     update_ac_lsa(oa);
@@ -716,6 +719,7 @@ ospf_usp_add(struct proto_ospf *po, struct prefix_node *n)
   add_tail(&po->usp_list, NODE ncopy);
   ncopy->px.addr = n->px.addr;
   ncopy->px.len = n->px.len;
+  ncopy->type = n->type;
 }
 
 static void
@@ -1191,10 +1195,8 @@ ospf_sh_usp(struct proto *p)
 {
 #ifdef OSPFv3
   struct proto_ospf *po = (struct proto_ospf *) p;
-  struct ospf_area *oa;
-  //struct prefix_node *n;
-  //unsigned int num = po->gr->hash_entries;
-  //struct top_hash_entry *hea[num];
+  //struct ospf_area *oa;
+  struct prefix_node *pxn;
   struct top_hash_entry *en;
 
   if (p->proto_state != PS_UP)
@@ -1203,13 +1205,21 @@ ospf_sh_usp(struct proto *p)
     cli_msg(0, "");
     return;
   }
-  cli_msg(-1020, "Self-originated Usable Prefixes");
-  cli_msg(-1020, "%-20s%-39s%-15s", "Advertising Router", "Prefix", "Prefix Length");
-  WALK_LIST(oa, po->area_list)
+  cli_msg(-1020, "Usable Prefixes to be advertised (may not yet be in LSADB)");
+  cli_msg(-1020, "%-20s%-39s%-15s", "Type", "Prefix", "Prefix Length");
+  WALK_LIST(pxn, po->usp_list)
   {
-    en = oa->ac_lsa;
-    if(en)
-      ospf_sh_usp_lsa(en);
+    switch(pxn->type)
+    {
+    case OSPF_USP_T_MANUAL:
+      cli_msg(-1020, "%-20s%-39I%-15d", "Manual", pxn->px.addr, pxn->px.len);
+      break;
+    case OSPF_USP_T_DHCPV6:
+      cli_msg(-1020, "%-20s%-39I%-15d", "DHCPv6", pxn->px.addr, pxn->px.len);
+      break;
+    default:
+      break;
+    }
   }
   cli_msg(-1020, "");
 

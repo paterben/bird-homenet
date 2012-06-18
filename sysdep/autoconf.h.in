@@ -62,4 +62,7 @@
 /* We have stdint.h */
 #undef HAVE_STDINT_H
 
+/* Linksys-specific syscfg calls enabled */
+#undef ENABLE_SYSCFG
+
 #define CONFIG_PATH ?

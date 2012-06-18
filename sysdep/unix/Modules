@@ -1,9 +1,11 @@
 log.c
 routerid.c
+linksys.c
 main.c
 timer.h
 io.c
 unix.h
+linksys.h
 endian.h
 config.Y
 random.c
