@@ -102,6 +102,7 @@
 #include <stdlib.h>
 #include "ospf.h"
 #include "lib/unix.h"
+#include "sysdep/unix/linksys.h"
 
 static int ospf_reload_routes(struct proto *p);
 static void ospf_rt_notify(struct proto *p, struct rtable *table UNUSED, net * n, rte * new, rte * old UNUSED, ea_list * attrs);
@@ -109,9 +110,6 @@ static int ospf_rte_better(struct rte *new, struct rte *old);
 static int ospf_rte_same(struct rte *new, struct rte *old);
 static void ospf_disp(timer *timer);
 static void ospf_set_rhwf(struct proto_ospf *po);
-#ifdef OSPFv3
-static void ospf_usp_add(struct proto_ospf *po, struct prefix_node *n);
-#endif
 
 static void
 ospf_area_initfib(struct fib_node *fn)
@@ -540,6 +538,13 @@ ospf_disp(timer * timer)
   struct proto_ospf *po = timer->data;
   struct ospf_area *oa;
 
+#ifdef ENABLE_SYSCFG
+  /* see if DHCPv6 delegated prefix has changed */
+  /* FIXME maybe this should be integrated into select() loop */
+  if(po->pxassignment)
+    update_dhcpv6_usable_prefix(po);
+#endif
+
   WALK_LIST(oa, po->area_list)
     area_disp(oa);
 
@@ -707,7 +712,7 @@ ospf_set_rhwf(struct proto_ospf *po)
  * Appends the prefix to the end of the protocol's
  * usp_list.
  */
-static void
+void
 ospf_usp_add(struct proto_ospf *po, struct prefix_node *n)
 {
   struct proto *p = &po->proto;

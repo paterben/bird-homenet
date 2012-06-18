@@ -12,8 +12,8 @@
 #ifdef ENABLE_SYSCFG
 #ifdef OSPFv3
 
-void get_usable_prefix(struct proto_ospf *po);
-void linksys_init(void);
+void update_usable_prefix(struct proto_ospf *po);
+//void linksys_init(void);
 
 #endif /* OSPFv3 */
 #endif /* ENABLE_SYSCFG */

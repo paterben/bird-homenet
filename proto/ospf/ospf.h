@@ -1003,6 +1003,7 @@ static inline int oa_is_nssa(struct ospf_area *oa)
 void schedule_link_lsa(struct ospf_iface *ifa);
 void schedule_ac_lsa(struct ospf_area *oa);
 void schedule_pxassign(struct proto_ospf *po);
+void ospf_usp_add(struct proto_ospf *po, struct prefix_node *n);
 #else
 static inline void schedule_link_lsa(struct ospf_iface *ifa UNUSED) {}
 #endif
