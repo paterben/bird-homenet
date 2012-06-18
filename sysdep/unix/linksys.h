@@ -12,7 +12,7 @@
 #ifdef ENABLE_SYSCFG
 #ifdef OSPFv3
 
-void update_usable_prefix(struct proto_ospf *po);
+void update_dhcpv6_usable_prefix(struct proto_ospf *po);
 //void linksys_init(void);
 
 #endif /* OSPFv3 */
