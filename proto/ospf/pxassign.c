@@ -16,6 +16,8 @@
  */
 
 #include "ospf.h"
+#include <stdlib.h>
+#include "sysdep/unix/linksys.h"
 
 #ifdef OSPFv3
 
@@ -706,5 +708,68 @@ pxassign_timer_hook(timer *timer)
   rem_node(NODE usp);
   mb_free(usp);
   rfree(timer);
+}
+
+#define USABLE_PREFIX_LENGTH (STD_ADDRESS_P_LENGTH + 4) /* 39 for IPv6 address, 4 for /length */
+static char usable_prefix[USABLE_PREFIX_LENGTH];
+
+int
+update_dhcpv6_usable_prefix(struct proto_ospf *po)
+{
+  struct proto *p = &po->proto;
+  struct prefix_node pxn;
+  struct prefix_node *n;
+  struct ospf_area *oa;
+  char *pos;
+  int have_dhcp_usp = 1;
+  int found = 0;
+  int change = 0;
+
+#ifdef ENABLE_SYSCFG
+  if (bird_syscfg_get(NULL, "ipv6_delegated_prefix", usable_prefix, USABLE_PREFIX_LENGTH) == -1)
+  {
+    have_dhcp_usp = 0;
+  }
+  else if ((pos=strchr(usable_prefix, '/')) != NULL)
+  {
+    *pos = '\0';
+    if(ip_pton(usable_prefix, &pxn.px.addr))
+    {
+      pxn.px.len = atoi(pos + 1);
+      pxn.type = OSPF_USP_T_DHCPV6;
+    }
+    else have_dhcp_usp = 0;
+  }
+  else have_dhcp_usp = 0;
+
+  // update usp_list entries of type DHCPV6
+  WALK_LIST(n, po->usp_list)
+  {
+    if(n->type == OSPF_USP_T_DHCPV6)
+    {
+      if(!have_dhcp_usp || !ipa_equal(n->px.addr, pxn.px.addr) || n->px.len != pxn.px.len)
+      {
+        // remove this node
+        OSPF_TRACE(D_EVENTS, "Removing DHCPv6 prefix: %I/%d", n->px.addr, n->px.len);
+        rem_node(NODE n);
+        mb_free(n);
+        change = 1;
+      }
+      else found = 1;
+    }
+  }
+  if(have_dhcp_usp && !found)
+  {
+    OSPF_TRACE(D_EVENTS, "Found new DHCPv6 prefix: %I/%d", pxn.px.addr, pxn.px.len);
+    ospf_usp_add(po, &pxn);
+    change = 1;
+  }
+  if(change)
+  {
+    WALK_LIST(oa, po->area_list)
+      schedule_ac_lsa(oa);
+  }
+#endif /* ENABLE_SYSCFG */
+  return 0;
 }
 #endif /* OSPFv3 */

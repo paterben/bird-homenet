@@ -102,7 +102,6 @@
 #include <stdlib.h>
 #include "ospf.h"
 #include "lib/unix.h"
-#include "sysdep/unix/linksys.h"
 
 static int ospf_reload_routes(struct proto *p);
 static void ospf_rt_notify(struct proto *p, struct rtable *table UNUSED, net * n, rte * new, rte * old UNUSED, ea_list * attrs);
@@ -538,12 +537,10 @@ ospf_disp(timer * timer)
   struct proto_ospf *po = timer->data;
   struct ospf_area *oa;
 
-#ifdef ENABLE_SYSCFG
   /* see if DHCPv6 delegated prefix has changed */
   /* FIXME maybe this should be integrated into select() loop */
   if(po->pxassignment)
     update_dhcpv6_usable_prefix(po);
-#endif
 
   WALK_LIST(oa, po->area_list)
     area_disp(oa);

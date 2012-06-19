@@ -9,13 +9,12 @@
 #ifndef _BIRD_LINKSYS_H_
 #define _BIRD_LINKSYS_H_
 
+#include "nest/bird.h"
+
 #ifdef ENABLE_SYSCFG
-#ifdef OSPFv3
 
-int update_dhcpv6_usable_prefix(struct proto_ospf *po);
-//void linksys_init(void);
+int bird_syscfg_get(const char *ns, const char *name, char *out_value, int outbufsz);
 
-#endif /* OSPFv3 */
 #endif /* ENABLE_SYSCFG */
 
 #endif /* _BIRD_LINKSYS_H_ */
