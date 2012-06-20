@@ -413,7 +413,7 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
         {
           usp2 = (struct ospf_lsa_ac_tlv_v_usp *)(tlv->value);
           lsa_get_ipv6_prefix((u32 *)usp2, &usp2_addr, &usp2_len, &usp2_pxopts, &usp2_rest);
-          if(net_in_net(usp_addr, usp_len, usp2_addr, usp2_len))
+          if(net_in_net(usp_addr, usp_len, usp2_addr, usp2_len) && (!ipa_equal(usp_addr, usp2_addr) || usp_len != usp2_len))
             return;
         }
       } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
@@ -735,6 +735,7 @@ static char usable_prefix[USABLE_PREFIX_LENGTH];
 int
 update_dhcpv6_usable_prefix(struct proto_ospf *po)
 {
+#ifdef ENABLE_SYSEVENT
   struct proto *p = &po->proto;
   struct prefix_node pxn;
   struct prefix_node *n;
@@ -744,7 +745,6 @@ update_dhcpv6_usable_prefix(struct proto_ospf *po)
   int found = 0;
   int change = 0;
 
-#ifdef ENABLE_SYSEVENT
   if (bird_sysevent_get(NULL, "ipv6_delegated_prefix", usable_prefix, USABLE_PREFIX_LENGTH) == -1)
   {
     have_dhcp_usp = 0;
