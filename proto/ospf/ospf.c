@@ -232,6 +232,7 @@ ospf_start(struct proto *p)
   struct ospf_config *c = (struct ospf_config *) (p->cf);
   struct ospf_area_config *ac;
   struct prefix_node *n;
+  struct ospf_area *oa;
 
   /* initialize RID: */
   po->rid_is_random = proto_get_rid_is_random(p->cf);
@@ -282,6 +283,15 @@ ospf_start(struct proto *p)
   struct ospf_iface_patt *ic;
   WALK_LIST(ic, c->vlink_list)
     ospf_iface_new(po->backbone, NULL, ic);
+
+#ifdef OSPFv3
+  // schedule origination of first AC LSA for each area
+  WALK_LIST(oa, po->area_list)
+  {
+    if(po->dridd || po->pxassignment)
+      schedule_ac_lsa(oa);
+  }
+#endif
 
   return PS_UP;
 }
@@ -537,10 +547,12 @@ ospf_disp(timer * timer)
   struct proto_ospf *po = timer->data;
   struct ospf_area *oa;
 
+#ifdef OSPFv3
   /* see if DHCPv6 delegated prefix has changed */
   /* FIXME maybe this should be integrated into select() loop */
   if(po->pxassignment)
     update_dhcpv6_usable_prefix(po);
+#endif
 
   WALK_LIST(oa, po->area_list)
     area_disp(oa);
@@ -552,6 +564,7 @@ ospf_disp(timer * timer)
   if (po->calcrt)
     ospf_rt_spf(po);
 
+#ifdef OSPFv3
   /* Perform prefix assignment if needed */
   if(po->pxassignment && po->pxassign)
   {
@@ -559,6 +572,7 @@ ospf_disp(timer * timer)
     ospf_pxassign(po);
     po->pxassign = 0;
   }
+#endif
 }
 
 /**
@@ -807,11 +821,13 @@ ospf_get_attr(eattr * a, byte * buf, int buflen UNUSED)
 static void
 ospf_usp_reconfigure(struct proto_ospf *po, struct ospf_config *old, struct ospf_config *new)
 {
-  struct prefix_node *n;
+  struct prefix_node *n, *n2;
 
-  /* FIXME we need to do much better: find the config differences,
-     possibly deassign addresses from interfaces */
-  init_list(&po->usp_list); /* empties the list */
+  WALK_LIST_DELSAFE(n, n2, po->usp_list)
+  {
+    rem_node(NODE n);
+    mb_free(n);
+  }
   WALK_LIST(n,new->usp_list)
   {
     ospf_usp_add(po,n);
