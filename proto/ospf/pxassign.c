@@ -385,14 +385,15 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
   struct ospf_iface *ifa, *ifa2;
   struct ospf_usp *usp;
   struct ospf_lsa_ac_tlv *tlv;
+  struct ospf_lsa_ac_tlv_v_usp *usp2;
   struct ospf_lsa_ac_tlv_v_asp *asp;
   struct ospf_neighbor *neigh;
   struct prefix_node *pxn, *n;
   timer *pxassign_timer;
-  ip_addr usp_addr, neigh_addr, neigh_r_addr;
-  unsigned int usp_len, neigh_len, neigh_r_len;
-  u8 usp_pxopts, neigh_pxopts;
-  u16 usp_rest, neigh_rest;
+  ip_addr usp_addr, usp2_addr, neigh_addr, neigh_r_addr;
+  unsigned int usp_len, usp2_len, neigh_len, neigh_r_len;
+  u8 usp_pxopts, usp2_pxopts, neigh_pxopts;
+  u16 usp_rest, usp2_rest, neigh_rest;
 
   lsa_get_ipv6_prefix((u32 *)cusp, &usp_addr, &usp_len, &usp_pxopts, &usp_rest);
 
@@ -400,6 +401,24 @@ ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *cusp)
 
   WALK_LIST(ifa, po->iface_list)
   {
+    /* 5.3.0 */
+    if((en = ospf_hash_find_ac_lsa_first(oa->po->gr, oa->areaid)) != NULL)
+    {
+      unsigned int offset;
+      unsigned int size;
+      do {
+        size = en->lsa.length - sizeof(struct ospf_lsa_header);
+        offset = 0;
+        while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_USP)) != NULL)
+        {
+          usp2 = (struct ospf_lsa_ac_tlv_v_usp *)(tlv->value);
+          lsa_get_ipv6_prefix((u32 *)usp2, &usp2_addr, &usp2_len, &usp2_pxopts, &usp2_rest);
+          if(net_in_net(usp_addr, usp_len, usp2_addr, usp2_len))
+            return;
+        }
+      } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
+    }
+
     /* 5.3.1 */
     /* FIXME I think the draft should say "adjacent routers" (state >= ExStart), that's what I suppose */
     byte have_neigh = 0;
