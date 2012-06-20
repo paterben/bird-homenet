@@ -673,7 +673,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 enable_debug
-enable_syscfg
+enable_sysevent
 enable_memcheck
 enable_client
 enable_ipv6
@@ -1309,7 +1309,7 @@ Optional Features:
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --enable-debug          enable internal debugging routines (default: disabled)
-  --enable-syscfg         enable Linksys-specific syscfg calls (default: disabled)
+  --enable-sysevent       enable Linksys-specific sysevent calls (default: disabled)
   --enable-memcheck       check memory allocations when debugging (default: enabled)
   --enable-client         enable building of BIRD client (default: enabled)
   --enable-ipv6           enable building of IPv6 version (default: disabled)
@@ -2257,11 +2257,11 @@ else
   enable_debug=no
 fi
 
-# Check whether --enable-syscfg was given.
-if test "${enable_syscfg+set}" = set; then :
-  enableval=$enable_syscfg;
+# Check whether --enable-sysevent was given.
+if test "${enable_sysevent+set}" = set; then :
+  enableval=$enable_sysevent;
 else
-  enable_syscfg=no
+  enable_sysevent=no
 fi
 
 # Check whether --enable-memcheck was given.
@@ -2363,10 +2363,10 @@ else
 	all_protocols=bgp,ospf,pipe,rip,static
 fi
 
-if test "$enable_syscfg" = yes ; then
-	$as_echo "#define ENABLE_SYSCFG 1" >>confdefs.h
+if test "$enable_sysevent" = yes ; then
+	$as_echo "#define ENABLE_SYSEVENT 1" >>confdefs.h
 
-#	AC_CHECK_LIB(syscfg,syscfg_get,,AC_MSG_ERROR([[Use of --enable-syscfg option requires libsyscfg.]]),)
+#	AC_CHECK_LIB(sysevent,sysevent_get,,AC_MSG_ERROR([[Use of --enable-sysevent option requires libsysevent]]),)
 fi
 
 if test "$given_suffix" = yes ; then

@@ -725,8 +725,8 @@ update_dhcpv6_usable_prefix(struct proto_ospf *po)
   int found = 0;
   int change = 0;
 
-#ifdef ENABLE_SYSCFG
-  if (bird_syscfg_get(NULL, "ipv6_delegated_prefix", usable_prefix, USABLE_PREFIX_LENGTH) == -1)
+#ifdef ENABLE_SYSEVENT
+  if (bird_sysevent_get(NULL, "ipv6_delegated_prefix", usable_prefix, USABLE_PREFIX_LENGTH) == -1)
   {
     have_dhcp_usp = 0;
   }
@@ -769,7 +769,7 @@ update_dhcpv6_usable_prefix(struct proto_ospf *po)
     WALK_LIST(oa, po->area_list)
       schedule_ac_lsa(oa);
   }
-#endif /* ENABLE_SYSCFG */
+#endif /* ENABLE_SYSEVENT */
   return 0;
 }
 #endif /* OSPFv3 */

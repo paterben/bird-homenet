@@ -11,10 +11,10 @@
 
 #include "nest/bird.h"
 
-#ifdef ENABLE_SYSCFG
+#ifdef ENABLE_SYSEVENT
 
-int bird_syscfg_get(const char *ns, const char *name, char *out_value, int outbufsz);
+int bird_sysevent_get(const char *ns, const char *name, char *out_value, int outbufsz);
 
-#endif /* ENABLE_SYSCFG */
+#endif /* ENABLE_SYSEVENT */
 
 #endif /* _BIRD_LINKSYS_H_ */

@@ -9,23 +9,23 @@
 #include "nest/bird.h"
 #include "proto/ospf/ospf.h"
 
-#ifdef ENABLE_SYSCFG
+#ifdef ENABLE_SYSEVENT
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 int
-bird_syscfg_get(const char *ns, const char *name, char *out_value, int outbufsz)
+bird_sysevent_get(const char *ns, const char *name, char *out_value, int outbufsz)
 {
   char cmd[64];
   FILE *pfile = NULL;
   char *pos;
 
   if(ns)
-    snprintf(cmd,sizeof(cmd),"/sbin/syscfg get %s::%s", ns, name);
+    snprintf(cmd,sizeof(cmd),"/sbin/sysevent get %s::%s", ns, name);
   else
-    snprintf(cmd,sizeof(cmd),"/sbin/syscfg get %s", name);
+    snprintf(cmd,sizeof(cmd),"/sbin/sysevent get %s", name);
 
   pfile = popen(cmd,"r");
   if(pfile == NULL)
@@ -44,4 +44,4 @@ bird_syscfg_get(const char *ns, const char *name, char *out_value, int outbufsz)
   return 0;
 }
 
-#endif /* ENABLE_SYSCFG */
+#endif /* ENABLE_SYSEVENT */
