@@ -1170,7 +1170,7 @@ ospf_sh_asp(struct proto *p)
   }
   cli_msg(-1021, "");
 
-  cli_msg(-1021, "All assigned prefixes");
+  cli_msg(-1021, "All assigned prefixes in LSADB");
   cli_msg(-1021, "%-20s%-14s%-39s%-15s", "Advertising Router", "Interface ID", "Prefix", "Prefix Length");
   WALK_SLIST(en, po->lsal)
   {
@@ -1241,11 +1241,11 @@ ospf_sh_usp(struct proto *p)
   }
   cli_msg(-1020, "");
 
-  cli_msg(-1020, "Other Usable Prefixes");
+  cli_msg(-1020, "All Usable Prefixes in LSADB");
   cli_msg(-1020, "%-20s%-39s%-15s", "Advertising Router", "Prefix", "Prefix Length");
   WALK_SLIST(en, po->lsal)
   {
-    if(en->lsa.type == LSA_T_AC && en->lsa.rt != po->router_id)
+    if(en->lsa.type == LSA_T_AC)
     {
       ospf_sh_usp_lsa(en);
     }
