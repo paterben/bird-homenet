@@ -247,89 +247,6 @@ choose_prefix(struct prefix *pxu, struct prefix *px, list used)
 }
 
 void
-ospf_pxcr(struct proto_ospf *po)
-{
-  struct proto *p = &po->proto;
-  struct ospf_area *oa;
-
-  OSPF_TRACE(D_EVENTS, "Starting prefix collision recovery algorithm");
-
-  WALK_LIST(oa, po->area_list)
-  {
-    // prefix collision recovery algorithm
-    int change = ospf_pxcr_area(oa);
-    if(change)
-      schedule_ac_lsa(oa);
-  }
-}
-
-int
-ospf_pxcr_area(struct ospf_area *oa)
-{
-  //struct proto *p = &oa->po->proto;
-  struct top_hash_entry *en;
-  struct ospf_lsa_ac_tlv *tlv;
-  unsigned int offset;
-  unsigned int size;
-  int change = 0;
-
-  if((en = ospf_hash_find_ac_lsa_first(oa->po->gr, oa->areaid)) == NULL)
-    return 0; /* no LSAs in this area, nothing to do */
-
-  do {
-    size = en->lsa.length - sizeof(struct ospf_lsa_header);
-    offset = 0;
-    while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_ASP)) != NULL)
-    {
-      change |= ospf_pxcr_asp(oa, (struct ospf_lsa_ac_tlv_v_asp *)(tlv->value), en->lsa.rt);
-    }
-  } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
-
-  return change;
-}
-
-int
-ospf_pxcr_asp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_asp *casp, u32 rid)
-{
-  struct proto_ospf *po = oa->po;
-  struct ospf_iface *ifa;
-  struct prefix_node *pxn;
-  ip_addr casp_addr;
-  unsigned int casp_len;
-  u8 casp_pxopts;
-  u16 casp_rest;
-  int change;
-
-  lsa_get_ipv6_prefix((u32 *)(casp) + 1, &casp_addr, &casp_len, &casp_pxopts, &casp_rest);
-
-  WALK_LIST(ifa, po->iface_list)
-  {
-    if(ifa->oa == oa)
-    {
-      WALK_LIST(pxn, ifa->asp_list)
-      {
-        /* 5.4.1 */
-        if(rid == po->router_id)
-          return 0;
-
-        /* 5.4.2 */
-        if(pxn->rid != po->router_id)
-          continue;
-
-        /* 5.4.3 */
-        if(ipa_equal(casp_addr, pxn->px.addr) && casp_len == pxn->px.len && rid > po->router_id)
-        {
-          rem_node(&pxn->n);
-          mb_free(pxn);
-          change = 1;
-        }
-      }
-    }
-  }
-  return change;
-}
-
-void
 ospf_pxassign(struct proto_ospf *po)
 {
   struct proto *p = &po->proto;
@@ -540,7 +457,7 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
   // step 4 will be executed if:
   //   !have_assignment_resp && !assignment_found && have_highest_rid
   // step 5 will be executed if:
-  //   !have_assignment_resp && assignment found
+  //   !have_assignment_resp && assignment_found
   // step 6 will be executed if:
   //   have_assignment_resp
 
@@ -701,31 +618,6 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
   }
 
   return change;
-}
-
-/** ospf_pxassign_resp - Step 5 of prefix assignment algorithm
- *
- * @usp: The tuple representing the Current Usable Prefix, interface,
- * and timer from step 2 of the prefix assignment algorithm
- *
- * In this step of the algorithm, we know we are responsible for
- * assigning a prefix from the Current Usable Prefix to the interface,
- * and it is time to do it.
- */
-void
-ospf_pxassign_resp(struct ospf_usp *usp)
-{
-}
-
-void
-pxassign_timer_hook(timer *timer)
-{
-  struct ospf_usp *usp = (struct ospf_usp *) timer->data;
-
-  ospf_pxassign_resp(usp);
-  rem_node(NODE usp);
-  mb_free(usp);
-  rfree(timer);
 }
 
 #ifdef ENABLE_SYSEVENT
