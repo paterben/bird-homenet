@@ -111,6 +111,8 @@ struct prefix_node
   struct prefix px;
   u32 rid;                      /* Who is responsible for this prefix.
                                    Only relevant for assigned prefixes. */
+  int valid;                    /* Used in prefix assignment algorithm.
+                                   Only relevant for assigned prefixes. */
 #define OSPF_USP_T_MANUAL 1
 #define OSPF_USP_T_DHCPV6 2
   u8 type;                      /* where we learned the prefix from.

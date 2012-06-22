@@ -32,7 +32,7 @@ int ospf_pxcr_asp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_asp *asp, u32 r
 void ospf_pxassign(struct proto_ospf *po);
 void ospf_pxassign_area(struct ospf_area *oa);
 void ospf_pxassign_resp(struct ospf_usp *usp);
-void ospf_pxassign_usp(struct ospf_area *oa, struct ospf_lsa_ac_tlv_v_usp *usp);
+int ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *usp);
 void pxassign_timer_hook(struct timer *timer);
 void * find_next_tlv(struct ospf_lsa_ac *lsa, int *offset, unsigned int size, u8 type);
 int update_dhcpv6_usable_prefix(struct proto_ospf *po);
