@@ -647,16 +647,16 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
         found = 1;
         n->valid = 1;
       }
-      else
-      {
-        pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
-        pxn->px.addr = neigh_r_addr;
-        pxn->px.len = neigh_r_len;
-        pxn->rid = neigh_rid;
-        pxn->valid = 1;
-        add_tail(&ifa->asp_list, NODE pxn);
-        // FIXME do physical prefix assignment
-      }
+    }
+    if(!found)
+    {
+      pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
+      pxn->px.addr = neigh_r_addr;
+      pxn->px.len = neigh_r_len;
+      pxn->rid = neigh_rid;
+      pxn->valid = 1;
+      add_tail(&ifa->asp_list, NODE pxn);
+      // FIXME do physical prefix assignment
     }
   }
 
