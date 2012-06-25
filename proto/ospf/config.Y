@@ -198,6 +198,17 @@ set_instance_id(unsigned id)
 #endif
 }
 
+static inline void
+set_pa_priority(unsigned p)
+{
+#ifdef OSPFv3
+  OSPF_PATT->pa_priority = p;
+  if(p <= 0 || p > 255) cf_error("Prefix assignment priority must be in range 1-255");
+#else
+  cf_error("Prefix assignment priority requires OSPFv3");
+#endif
+}
+
 CF_DECLS
 
 CF_KEYWORDS(OSPF, AREA, OSPF_METRIC1, OSPF_METRIC2, OSPF_TAG, OSPF_ROUTER_ID)
@@ -380,6 +391,7 @@ ospf_iface_item:
  | RX BUFFER NORMAL { OSPF_PATT->rxbuf = OSPF_RXBUF_NORMAL ; }
  | RX BUFFER expr { OSPF_PATT->rxbuf = $3 ; if (($3 < OSPF_RXBUF_MINSIZE) || ($3 > OSPF_MAX_PKT_SIZE)) cf_error("Buffer size must be in range 256-65535"); }
  | password_list
+ | PREFIX ASSIGNMENT PRIORITY expr { set_pa_priority($4); }
  ;
 
 pref_list:
@@ -442,6 +454,7 @@ ospf_iface_start:
   OSPF_PATT->rxmtint = RXMTINT_D;
   OSPF_PATT->inftransdelay = INFTRANSDELAY_D;
   OSPF_PATT->priority = PRIORITY_D;
+  OSPF_PATT->pa_priority = PA_PRIORITY_D;
   OSPF_PATT->waitint = WAIT_DMH*HELLOINT_D;
   OSPF_PATT->deadc = DEADC_D;
   OSPF_PATT->deadint = 0;
@@ -572,8 +585,8 @@ CF_CLI(SHOW OSPF USABLE, optsym, [<name>], [[Show information about usable prefi
 CF_CLI(SHOW OSPF ASSIGNED, optsym, [<name>], [[Show information about assigned prefixes]])
 { ospf_sh_asp(proto_get_named($4, &proto_ospf)); };
 
-CF_CLI(SHOW OSPF USPTIMERS, optsym, [<name>], [[Show debug information about prefix assignment timers]])
-{ ospf_sh_usptimers(proto_get_named($4, &proto_ospf)); };
+CF_CLI(SHOW OSPF ASSIGNMENT OPTIONS, optsym, [<name>], [[Show information about interface options TLVs]])
+{ ospf_sh_iface_opt(proto_get_named($5, &proto_ospf)); };
 
 CF_CLI(SHOW OSPF INTERFACE, optsym opttext, [<name>] [\"<interface>\"], [[Show information about interface]])
 { ospf_sh_iface(proto_get_named($4, &proto_ospf), $5); };

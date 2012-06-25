@@ -1092,39 +1092,6 @@ ospf_sh_iface(struct proto *p, char *iff)
   cli_msg(0, "");
 }
 
-void
-ospf_sh_usptimers(struct proto *p)
-{
-#ifdef OSPFv3
-  struct proto_ospf *po = (struct proto_ospf *) p;
-  struct ospf_iface *ifa = NULL;
-  struct ospf_usp *usp;
-
-  if (p->proto_state != PS_UP)
-  {
-    cli_msg(-1022, "%s: is not up", p->name);
-    cli_msg(0, "");
-    return;
-  }
-
-  cli_msg(-1022, "%-11s%-39s%-15s%-7s", "Interface", "Prefix", "Prefix Length", "Timer");
-  WALK_LIST(ifa, po->iface_list)
-  {
-    WALK_LIST(usp, ifa->usp_list)
-    {
-      cli_msg(-1022, "%-11s%-1I%-15d%-7d", ifa->iface->name, usp->px.addr, usp->px.len, usp->pxassign_timer);
-    }
-  }
-
-  cli_msg(0, "");
-  return;
-#else /* OSPFv2 */
-  cli_msg(-1022, "Command only available for OSPFv3");
-  cli_msg(0, "");
-  return;
-#endif
-}
-
 static void
 ospf_sh_asp_lsa(struct top_hash_entry *en)
 {
@@ -1138,9 +1105,11 @@ ospf_sh_asp_lsa(struct top_hash_entry *en)
     unsigned int len;
     u8 pxopts;
     u16 rest;
+    u8 pa_priority;
 
     lsa_get_ipv6_prefix((u32 *)(asp) + 1, &addr, &len, &pxopts, &rest);
-    cli_msg(-1021, "%-20R%-14d%-1I/%-14d", en->lsa.rt, asp->id, addr, len);
+    pa_priority = ospf_get_pa_priority(en, asp->id); // not optimal, parses whole LSA
+    cli_msg(-1021, "%-20R%-14d%-1I/%-14d%-10d", en->lsa.rt, asp->id, addr, len, pa_priority);
 
   }
 }
@@ -1162,21 +1131,78 @@ ospf_sh_asp(struct proto *p)
   }
 
   cli_msg(-1021, "Prefixes assigned to directly connected interfaces (may not yet be in LSADB)");
-  cli_msg(-1021, "%-20s%-14s%-39s%-15s", "Advertising Router", "Interface", "Prefix", "Prefix Length");
+  cli_msg(-1021, "%-20s%-14s%-39s%-15s%-10s", "Advertising Router", "Interface", "Prefix", "Prefix Length", "Priority");
   WALK_LIST(ifa, po->iface_list)
   {
     WALK_LIST(n, ifa->asp_list)
-      cli_msg(-1021, "%-20R%-14s%-1I/%-14d", n->rid, ifa->iface->name, n->px.addr, n->px.len);
+      cli_msg(-1021, "%-20R%-14s%-1I/%-14d%-10d", n->rid, ifa->iface->name, n->px.addr, n->px.len, ifa->pa_priority);
   }
   cli_msg(-1021, "");
 
   cli_msg(-1021, "All assigned prefixes in LSADB");
-  cli_msg(-1021, "%-20s%-14s%-39s%-15s", "Advertising Router", "Interface ID", "Prefix", "Prefix Length");
+  cli_msg(-1021, "%-20s%-14s%-39s%-15s%-10s", "Advertising Router", "Interface ID", "Prefix", "Prefix Length", "Priority");
   WALK_SLIST(en, po->lsal)
   {
-   if(en->lsa.type == LSA_T_AC)
+    if(en->lsa.type == LSA_T_AC)
     {
       ospf_sh_asp_lsa(en);
+    }
+  }
+
+  cli_msg(0, "");
+  return;
+#else /* OSPFv2 */
+  cli_msg(-1021, "Command only available for OSPFv3");
+  cli_msg(0, "");
+  return;
+#endif
+}
+
+static void
+ospf_sh_iface_opt_lsa(struct top_hash_entry *en)
+{
+  struct ospf_lsa_ac_tlv *tlv = en->lsa_body;
+  unsigned int size = en->lsa.length - sizeof(struct ospf_lsa_header);
+  unsigned int offset = 0;
+  while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_IFACE_OPT)) != NULL)
+  {
+    struct ospf_lsa_ac_tlv_v_iface_opt *iface_opt = (struct ospf_lsa_ac_tlv_v_iface_opt *) tlv->value;
+
+    cli_msg(-1022, "%-20R%-14d%-10d", en->lsa.rt, iface_opt->id, iface_opt->pa_priority);
+  }
+}
+
+void
+ospf_sh_iface_opt(struct proto *p)
+{
+#ifdef OSPFv3
+  struct proto_ospf *po = (struct proto_ospf *) p;
+  struct ospf_iface *ifa;
+  struct top_hash_entry *en;
+  struct prefix_node *n;
+
+  if (p->proto_state != PS_UP)
+  {
+    cli_msg(-1022, "%s: is not up", p->name);
+    cli_msg(0, "");
+    return;
+  }
+  cli_msg(-1022, "Options of directly connected interfaces (may not yet be in LSADB)");
+  cli_msg(-1022, "%-20s%-14s%-10s", "Advertising Router", "Interface", "Priority");
+  WALK_LIST(ifa, po->iface_list)
+  {
+    WALK_LIST(n, ifa->asp_list)
+      cli_msg(-1021, "%-20R%-14s%-10d", po->router_id, ifa->iface->name, ifa->pa_priority);
+  }
+  cli_msg(-1022, "");
+
+  cli_msg(-1022, "All interface options in LSADB");
+  cli_msg(-1022, "%-20s%-14s%-10s", "Advertising Router", "Interface ID", "Priority");
+  WALK_SLIST(en, po->lsal)
+  {
+    if(en->lsa.type == LSA_T_AC)
+    {
+      ospf_sh_iface_opt_lsa(en);
     }
   }
 

@@ -21,6 +21,21 @@
 
 #ifdef OSPFv3
 
+u8
+ospf_get_pa_priority(struct top_hash_entry *en, u32 id)
+{
+  struct ospf_lsa_ac_tlv *tlv = en->lsa_body;
+  unsigned int size = en->lsa.length - sizeof(struct ospf_lsa_header);
+  unsigned int offset = 0;
+  while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_IFACE_OPT)) != NULL)
+  {
+    struct ospf_lsa_ac_tlv_v_iface_opt *iface_opt = (struct ospf_lsa_ac_tlv_v_iface_opt *) tlv->value;
+    if(iface_opt->id == id)
+      return iface_opt->pa_priority;
+  }
+  return 0; // reserved priority value
+}
+
 /**
  * find_next_tlv - find next TLV of specified type in AC LSA
  * @lsa: A pointer to the beginning of the LSA body
@@ -113,7 +128,7 @@ random_prefix(struct prefix *px, struct prefix *pxsub)
     _I3(pxsub->addr) = random_u32();
 
   // clean up right part of prefix
-  if (px->len < 128)
+  if (pxsub->len < 128)
     pxsub->addr.addr[pxsub->len / 32] &= u32_mkmask(pxsub->len % 32);
 
   // clean up left part of prefix
@@ -524,7 +539,7 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
     /* 5.3.4c */
     struct prefix px_tmp, pxu_tmp;
     px_tmp.addr = IPA_NONE;
-    px_tmp.len = LSA_AC_ASP_MAX_PREFIX_LENGTH;
+    px_tmp.len = LSA_AC_ASP_D_PREFIX_LENGTH;
     pxu_tmp.addr = usp_addr;
     pxu_tmp.len = usp_len;
     switch(choose_prefix(&pxu_tmp, &px_tmp, used))

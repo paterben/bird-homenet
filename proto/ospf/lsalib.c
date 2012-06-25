@@ -474,9 +474,9 @@ lsa_validate_ac_tlv_rhwf(u8 *rhwf)
 }
 
 static int
-lsa_validate_ac_tlv_usp(u8 *rhwf)
+lsa_validate_ac_tlv_usp(u8 *tlvh)
 {
-  struct ospf_lsa_ac_tlv_v_usp *tlv = (struct ospf_lsa_ac_tlv_v_usp *) (rhwf + sizeof(struct ospf_lsa_ac_tlv));
+  struct ospf_lsa_ac_tlv_v_usp *tlv = (struct ospf_lsa_ac_tlv_v_usp *) (tlvh + sizeof(struct ospf_lsa_ac_tlv));
 
   if(tlv->pxlen < LSA_AC_USP_MIN_PREFIX_LENGTH || tlv->pxlen > LSA_AC_USP_MAX_PREFIX_LENGTH)
     return 0;
@@ -487,9 +487,20 @@ lsa_validate_ac_tlv_usp(u8 *rhwf)
 }
 
 static int
-lsa_validate_ac_tlv_asp(u8 *rhwf)
+lsa_validate_ac_tlv_iface_opt(u8 *tlvh)
 {
-  struct ospf_lsa_ac_tlv_v_asp *tlv = (struct ospf_lsa_ac_tlv_v_asp *) (rhwf + sizeof(struct ospf_lsa_ac_tlv));
+  struct ospf_lsa_ac_tlv_v_iface_opt *tlv = (struct ospf_lsa_ac_tlv_v_iface_opt *) (tlvh + sizeof(struct ospf_lsa_ac_tlv));
+
+  if(tlv->pa_priority == 0) // reserved value
+    return 0;
+
+  return 1;
+}
+
+static int
+lsa_validate_ac_tlv_asp(u8 *tlvh)
+{
+  struct ospf_lsa_ac_tlv_v_asp *tlv = (struct ospf_lsa_ac_tlv_v_asp *) (tlvh + sizeof(struct ospf_lsa_ac_tlv));
 
   if(tlv->pxlen < LSA_AC_ASP_MIN_PREFIX_LENGTH || tlv->pxlen > LSA_AC_ASP_MAX_PREFIX_LENGTH)
     return 0;
@@ -525,6 +536,10 @@ lsa_validate_ac(struct ospf_lsa_header *lsa, struct ospf_lsa_ac *body)
           break;
         case LSA_AC_TLV_T_ASP:
           if(!lsa_validate_ac_tlv_asp(tlv + offset))
+            return 0;
+          break;
+        case LSA_AC_TLV_T_IFACE_OPT:
+          if(!lsa_validate_ac_tlv_iface_opt(tlv + offset))
             return 0;
           break;
         default:

@@ -1477,34 +1477,66 @@ add_usp_tlvs(struct proto_ospf *po)
 }
 
 /**
- * add_asp_tlv - Adds Assigned Prefix TLVs to LSA buffer
- * @po: The proto_ospf to which the LSA buffer belongs to
+ * add_iface_opt_tlvs - Adds Interface Options TLVs to LSA buffer
+ * @oa: Only interfaces in this area will be advertised.
  *
  * This function is called by originate_ac_lsa_body.
  */
 static void
-add_asp_tlvs(struct proto_ospf *po)
+add_iface_opt_tlvs(struct ospf_area *oa)
 {
+  struct proto_ospf *po = oa->po;
+  struct ospf_lsa_ac_tlv *tlv;
+  struct ospf_lsa_ac_tlv_v_iface_opt *iface_opt;
+  struct ospf_iface *ifa;
+
+  WALK_LIST(ifa, po->iface_list)
+  {
+    if(ifa->oa == oa)
+    {
+      tlv = lsab_allocz(po, sizeof(struct ospf_lsa_ac_tlv) + sizeof(struct ospf_lsa_ac_tlv_v_iface_opt));
+      tlv->type = LSA_AC_TLV_T_IFACE_OPT;
+      tlv->length = sizeof(struct ospf_lsa_ac_tlv_v_iface_opt);
+      iface_opt = (struct ospf_lsa_ac_tlv_v_iface_opt *) tlv->value;
+      iface_opt->id = ifa->iface->index;
+      iface_opt->pa_priority = ifa->pa_priority;
+    }
+  }
+}
+
+/**
+ * add_asp_tlvs - Adds Assigned Prefix TLVs to LSA buffer
+ * @oa: Only assigned prefixes in this area will be advertised.
+ *
+ * This function is called by originate_ac_lsa_body.
+ */
+static void
+add_asp_tlvs(struct ospf_area *oa)
+{
+  struct proto_ospf *po = oa->po;
   struct ospf_lsa_ac_tlv *asp;
   struct ospf_iface *ifa;
   struct prefix_node *n;
   //int offset;
 
-  // Add all self-responsible prefixes from asp_lists of all interfaces
+  // Add all self-responsible prefixes from asp_lists of all interfaces in area
   WALK_LIST(ifa, po->iface_list)
   {
-    WALK_LIST(n, ifa->asp_list)
+    if(ifa->oa == oa)
     {
-      /* only advertise prefixes for which we are responsible */
-      if(n->rid == po->router_id)
+      WALK_LIST(n, ifa->asp_list)
       {
-        //offset = po->lsab_used;
-        asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
-        asp->type = LSA_AC_TLV_T_ASP;
-        memcpy(lsab_alloc(po, sizeof(u32)), &ifa->iface->index, sizeof(u32));
-        lsa_put_prefix(po, n->px.addr, n->px.len, 0);
-        //asp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
-        asp->length = IPV6_PREFIX_SPACE_NOPAD(n->px.len) + sizeof(u32);
+        /* only advertise prefixes for which we are responsible */
+        if(n->rid == po->router_id)
+        {
+          //offset = po->lsab_used;
+          asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv));
+          asp->type = LSA_AC_TLV_T_ASP;
+          memcpy(lsab_alloc(po, sizeof(u32)), &ifa->iface->index, sizeof(u32));
+          lsa_put_prefix(po, n->px.addr, n->px.len, 0);
+          //asp->length = po->lsab_used - sizeof(struct ospf_lsa_ac_tlv) - offset;
+          asp->length = IPV6_PREFIX_SPACE_NOPAD(n->px.len) + sizeof(u32);
+        }
       }
     }
   }
@@ -1609,7 +1641,11 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
   //offset = po->lsab_used;
   //ASSERT...
 
-  add_asp_tlvs(po);
+  add_iface_opt_tlvs(oa);
+  // offset = po->lsab_used;
+  // ASSERT...
+
+  add_asp_tlvs(oa);
   // offset = po->lsab_used;
   // ASSERT...
 

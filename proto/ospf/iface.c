@@ -542,6 +542,7 @@ ospf_iface_new(struct ospf_area *oa, struct ifa *addr, struct ospf_iface_patt *i
 
 #ifdef OSPFv3
   ifa->instance_id = ip->instance_id;
+  ifa->pa_priority = ip->pa_priority;
 #endif
 
   ifa->type = ospf_iface_classify(ip->type, addr);

@@ -252,6 +252,8 @@ struct ospf_iface
  /* IID 240(0xF0): unassigned by IANA */
   u8 instance_id;		/* Used to differentiate between more OSPF
 				   instances on one interface */
+#define PA_PRIORITY_D 10
+  u8 pa_priority;              /* Used in prefix assignment algorithm */
   list asp_list;                /* list of struct prefix_node.
                                    List of prefixes that have been assigned to this interface
                                    by us from a usable prefix */
@@ -609,9 +611,8 @@ struct ospf_lsa_ac /* must contain at least one TLV */
 /* Auto-Configuration LSA Type-Length-Value (TLV) types */
 #define LSA_AC_TLV_T_RHWF 1/* Router-Hardware-Fingerprint */
 #define LSA_AC_TLV_T_USP 2 /* Usable Prefix */
- /* type TBD-BY-IANA-1 */
 #define LSA_AC_TLV_T_ASP 3 /* Assigned Prefix */
- /* type TBD-BY-IANA-2 */
+#define LSA_AC_TLV_T_IFACE_OPT 4 /* Interface Options */
 
 /* If x is the length of the TLV as specified in its
    Length field, returns the number of bytes used to
@@ -630,10 +631,12 @@ struct ospf_lsa_ac_tlv /* Generic TLV */
   u32 value[];
 };
 
-#define LSA_AC_USP_MIN_PREFIX_LENGTH 8
-#define LSA_AC_USP_MAX_PREFIX_LENGTH 64
-#define LSA_AC_ASP_MIN_PREFIX_LENGTH 64
-#define LSA_AC_ASP_MAX_PREFIX_LENGTH 64
+#define LSA_AC_USP_MIN_PREFIX_LENGTH   8
+#define LSA_AC_USP_MAX_PREFIX_LENGTH   64
+#define LSA_AC_ASP_MIN_PREFIX_LENGTH   64
+#define LSA_AC_ASP_D_PREFIX_LENGTH     64
+#define LSA_AC_ASP_D_SUB_PREFIX_LENGTH 80
+#define LSA_AC_ASP_MAX_PREFIX_LENGTH   128
 
 struct ospf_lsa_ac_tlv_v_usp /* One Usable Prefix */
 {
@@ -662,6 +665,20 @@ struct ospf_lsa_ac_tlv_v_asp /* One Assigned Prefix */
   u8 pxlen;
 #endif
   u32 prefix[];
+};
+
+struct ospf_lsa_ac_tlv_v_iface_opt /* One Interface Preference */
+{
+  u32 id;
+#ifdef CPU_BIG_ENDIAN
+  u8 pa_priority;
+  u8 reserved8;
+  u16 reserved16;
+#else
+  u16 reserved16;
+  u8 reserved8;
+  u8 pa_priority;
+#endif
 };
 
 
@@ -978,6 +995,7 @@ struct ospf_iface_patt
 
 #ifdef OSPFv3
   u8 instance_id;
+  u8 pa_priority;
 #endif
 };
 
@@ -1016,7 +1034,7 @@ void ospf_sh_iface(struct proto *p, char *iff);
 void ospf_sh_state(struct proto *p, int verbose, int reachable);
 void ospf_sh_usp(struct proto *p);
 void ospf_sh_asp(struct proto *p);
-void ospf_sh_usptimers(struct proto *p);
+void ospf_sh_iface_opt(struct proto *p);
 
 #define SH_ROUTER_SELF 0xffffffff
 
