@@ -465,20 +465,25 @@ lsa_validate_prefix(struct ospf_lsa_header *lsa, struct ospf_lsa_prefix *body)
 }
 
 static int
-lsa_validate_ac_tlv_rhwf(u8 *rhwf)
+lsa_validate_ac_tlv_rhwf(u8 *tlvh)
 {
-  struct ospf_lsa_ac_tlv *tlv = (struct ospf_lsa_ac_tlv *) rhwf;
+  struct ospf_lsa_ac *tlvheader = (struct ospf_lsa_ac *) tlvh;
 
-  return tlv->length >= 32; /* Only constraint on Router-Hardware-Fingerprint TLV
-                               is that the Value portion be 32 bytes long or more */
+  return tlvheader->length >= 32; /* Only constraint on Router-Hardware-Fingerprint TLV
+                                     is that the Value portion be 32 bytes long or more */
 }
 
 static int
 lsa_validate_ac_tlv_usp(u8 *tlvh)
 {
-  struct ospf_lsa_ac_tlv_v_usp *tlv = (struct ospf_lsa_ac_tlv_v_usp *) (tlvh + sizeof(struct ospf_lsa_ac_tlv));
+  struct ospf_lsa_ac *tlvheader = (struct ospf_lsa_ac *) tlvh;
 
-  if(tlv->pxlen < LSA_AC_USP_MIN_PREFIX_LENGTH || tlv->pxlen > LSA_AC_USP_MAX_PREFIX_LENGTH)
+  if(tlvheader->length < sizeof(u32))
+    return 0;
+
+  struct ospf_lsa_ac_tlv_v_usp *usp = (struct ospf_lsa_ac_tlv_v_usp *) (tlvh + sizeof(struct ospf_lsa_ac));
+
+  if(usp->pxlen < LSA_AC_USP_MIN_PREFIX_LENGTH || usp->pxlen > LSA_AC_USP_MAX_PREFIX_LENGTH)
     return 0;
 
   /* FIXME other tests on prefix? */
@@ -487,25 +492,58 @@ lsa_validate_ac_tlv_usp(u8 *tlvh)
 }
 
 static int
-lsa_validate_ac_tlv_iface_opt(u8 *tlvh)
-{
-  struct ospf_lsa_ac_tlv_v_iface_opt *tlv = (struct ospf_lsa_ac_tlv_v_iface_opt *) (tlvh + sizeof(struct ospf_lsa_ac_tlv));
-
-  if(tlv->pa_priority == 0) // reserved value
-    return 0;
-
-  return 1;
-}
-
-static int
 lsa_validate_ac_tlv_asp(u8 *tlvh)
 {
-  struct ospf_lsa_ac_tlv_v_asp *tlv = (struct ospf_lsa_ac_tlv_v_asp *) (tlvh + sizeof(struct ospf_lsa_ac_tlv));
+  struct ospf_lsa_ac *tlvheader = (struct ospf_lsa_ac *) tlvh;
+
+  if(tlvheader->length < sizeof(u32))
+    return 0;
+
+  struct ospf_lsa_ac_tlv_v_asp *tlv = (struct ospf_lsa_ac_tlv_v_asp *) (tlvh + sizeof(struct ospf_lsa_ac));
 
   if(tlv->pxlen < LSA_AC_ASP_MIN_PREFIX_LENGTH || tlv->pxlen > LSA_AC_ASP_MAX_PREFIX_LENGTH)
     return 0;
 
   /* FIXME other tests on prefix / interface ID? */
+
+  return 1;
+}
+
+static int
+lsa_validate_ac_tlv_iasp(u8 *tlvh)
+{
+  struct ospf_lsa_ac *tlvheader = (struct ospf_lsa_ac *) tlvh;
+
+  if(tlvheader->length < LSA_AC_IASP_OFFSET) //IID + Options field
+    return 0;
+
+  struct ospf_lsa_ac_tlv_v_iasp *iasp = (struct ospf_lsa_ac_tlv_v_iasp *) (tlvh + sizeof(struct ospf_lsa_ac));
+
+  if(iasp->pa_priority == 0) // reserved value
+    return 0;
+
+  unsigned int offset = LSA_AC_IASP_OFFSET;
+  unsigned int bound = tlvheader->length - 4;
+  unsigned int size = tlvheader->length;
+
+  u8 *body = (u8 *) iasp;
+
+  while (offset <= bound)
+  {
+    if(((struct ospf_lsa_ac *)(body + offset))->length + offset > size)
+      return 0;
+
+    switch(((struct ospf_lsa_ac *)(body + offset))->type)
+    {
+      case LSA_AC_TLV_T_ASP:
+        if(!lsa_validate_ac_tlv_asp(body + offset))
+          return 0;
+        break;
+      default:
+        break;
+    }
+    offset += LSA_AC_TLV_SPACE(((struct ospf_lsa_ac *)(body + offset))->length);
+  }
 
   return 1;
 }
@@ -522,9 +560,9 @@ lsa_validate_ac(struct ospf_lsa_header *lsa, struct ospf_lsa_ac *body)
 
     u8 *tlv = (u8 *) body;
     do {
-      if(((struct ospf_lsa_ac_tlv *)(tlv + offset))->length + offset > size)
+      if(((struct ospf_lsa_ac *)(tlv + offset))->length + offset > size)
         return 0;
-      switch(((struct ospf_lsa_ac_tlv *)(tlv + offset))->type)
+      switch(((struct ospf_lsa_ac *)(tlv + offset))->type)
       {
         case LSA_AC_TLV_T_RHWF:
           if(!lsa_validate_ac_tlv_rhwf(tlv + offset))
@@ -534,18 +572,17 @@ lsa_validate_ac(struct ospf_lsa_header *lsa, struct ospf_lsa_ac *body)
           if(!lsa_validate_ac_tlv_usp(tlv + offset))
             return 0;
           break;
-        case LSA_AC_TLV_T_ASP:
-          if(!lsa_validate_ac_tlv_asp(tlv + offset))
+        case LSA_AC_TLV_T_IASP:
+          if(!lsa_validate_ac_tlv_iasp(tlv + offset))
             return 0;
           break;
-        case LSA_AC_TLV_T_IFACE_OPT:
-          if(!lsa_validate_ac_tlv_iface_opt(tlv + offset))
-            return 0;
+        case LSA_AC_TLV_T_ASP:
+          return 0; //must be nested in IASP TLVs
           break;
         default:
           break;
       }
-      offset += LSA_AC_TLV_SPACE(((struct ospf_lsa_ac_tlv *)(tlv + offset))->length);
+      offset += LSA_AC_TLV_SPACE(((struct ospf_lsa_ac *)(tlv + offset))->length);
     }
     while (offset <= bound);
 

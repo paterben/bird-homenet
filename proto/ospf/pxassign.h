@@ -22,9 +22,9 @@ void ospf_pxassign(struct proto_ospf *po);
 void ospf_pxassign_area(struct ospf_area *oa);
 int ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *usp);
 //void pxassign_timer_hook(struct timer *timer);
-void * find_next_tlv(struct ospf_lsa_ac *lsa, int *offset, unsigned int size, u8 type);
+void * find_next_tlv(void *lsa, int *offset, unsigned int size, u8 type);
 int update_dhcpv6_usable_prefix(struct proto_ospf *po);
-u8 ospf_get_pa_priority(struct top_hash_entry *en, u32 id);
+//u8 ospf_get_pa_priority(struct top_hash_entry *en, u32 id);
 
 #endif /* OSPFv3 */
 

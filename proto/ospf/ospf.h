@@ -115,8 +115,11 @@ struct prefix_node
                                    Only relevant for assigned prefixes. */
 #define OSPF_USP_T_MANUAL 1
 #define OSPF_USP_T_DHCPV6 2
-  u8 type;                      /* where we learned the prefix from.
+  u8 type;                      /* Where we learned the prefix from.
                                    Only relevant for usable prefixes. */
+  u8 pa_priority;               /* The prefix assignment priority of
+                                   the router responsible for this prefix.
+                                   Only relevant for assigned prefixes. */
 };
 
 struct nbma_node
@@ -252,7 +255,9 @@ struct ospf_iface
  /* IID 240(0xF0): unassigned by IANA */
   u8 instance_id;		/* Used to differentiate between more OSPF
 				   instances on one interface */
+#define PA_PRIORITY_MIN 1
 #define PA_PRIORITY_D 10
+#define PA_PRIORITY_MAX 255
   u8 pa_priority;              /* Used in prefix assignment algorithm */
   list asp_list;                /* list of struct prefix_node.
                                    List of prefixes that have been assigned to this interface
@@ -610,9 +615,9 @@ struct ospf_lsa_ac /* must contain at least one TLV */
 
 /* Auto-Configuration LSA Type-Length-Value (TLV) types */
 #define LSA_AC_TLV_T_RHWF 1/* Router-Hardware-Fingerprint */
-#define LSA_AC_TLV_T_USP 2 /* Usable Prefix */
-#define LSA_AC_TLV_T_ASP 3 /* Assigned Prefix */
-#define LSA_AC_TLV_T_IFACE_OPT 4 /* Interface Options */
+#define LSA_AC_TLV_T_USP  2 /* Usable Prefix */
+#define LSA_AC_TLV_T_ASP  3 /* Assigned Prefix */
+#define LSA_AC_TLV_T_IASP 4 /* Interface Assigned Prefixes */
 
 /* If x is the length of the TLV as specified in its
    Length field, returns the number of bytes used to
@@ -654,7 +659,6 @@ struct ospf_lsa_ac_tlv_v_usp /* One Usable Prefix */
 
 struct ospf_lsa_ac_tlv_v_asp /* One Assigned Prefix */
 {
-  u32 id;
 # ifdef CPU_BIG_ENDIAN
   u8 pxlen;
   u8 reserved8;
@@ -667,7 +671,9 @@ struct ospf_lsa_ac_tlv_v_asp /* One Assigned Prefix */
   u32 prefix[];
 };
 
-struct ospf_lsa_ac_tlv_v_iface_opt /* One Interface Preference */
+#define LSA_AC_IASP_OFFSET (2 * sizeof(u32)) //offset to first Assigned Prefix TLV
+
+struct ospf_lsa_ac_tlv_v_iasp /* One Interface Assigned Prefixes */
 {
   u32 id;
 #ifdef CPU_BIG_ENDIAN
@@ -679,6 +685,7 @@ struct ospf_lsa_ac_tlv_v_iface_opt /* One Interface Preference */
   u8 reserved8;
   u8 pa_priority;
 #endif
+  u32 rest[]; // Assigned Prefix TLVs
 };
 
 
@@ -864,6 +871,9 @@ struct ospf_neighbor
 #define ACKL_DELAY 1
   timer *ackd_timer;		/* Delayed ack timer */
   u32 csn;                      /* Last received crypt seq number (for MD5) */
+#ifdef OSPFv3
+  u8 pa_priority;               /* Used in prefix assignment algorithm */
+#endif
 };
 
 /* Definitions for interface state machine */
@@ -1034,7 +1044,7 @@ void ospf_sh_iface(struct proto *p, char *iff);
 void ospf_sh_state(struct proto *p, int verbose, int reachable);
 void ospf_sh_usp(struct proto *p);
 void ospf_sh_asp(struct proto *p);
-void ospf_sh_iface_opt(struct proto *p);
+void ospf_sh_pa_priorities(struct proto *p);
 
 #define SH_ROUTER_SELF 0xffffffff
 

@@ -585,8 +585,8 @@ CF_CLI(SHOW OSPF USABLE, optsym, [<name>], [[Show information about usable prefi
 CF_CLI(SHOW OSPF ASSIGNED, optsym, [<name>], [[Show information about assigned prefixes]])
 { ospf_sh_asp(proto_get_named($4, &proto_ospf)); };
 
-CF_CLI(SHOW OSPF ASSIGNMENT OPTIONS, optsym, [<name>], [[Show information about interface options TLVs]])
-{ ospf_sh_iface_opt(proto_get_named($5, &proto_ospf)); };
+CF_CLI(SHOW OSPF PRIORITIES, optsym, [<name>], [[Show information about interface assigned prefixes TLVs]])
+{ ospf_sh_pa_priorities(proto_get_named($4, &proto_ospf)); };
 
 CF_CLI(SHOW OSPF INTERFACE, optsym opttext, [<name>] [\"<interface>\"], [[Show information about interface]])
 { ospf_sh_iface(proto_get_named($4, &proto_ospf), $5); };

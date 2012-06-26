@@ -815,6 +815,16 @@ ospf_iface_reconfigure(struct ospf_iface *ifa, struct ospf_iface_patt *new)
     ifa->ecmp_weight = new->ecmp_weight;
   }
 
+#ifdef OSPFv3
+  /* PA_PRIORITY */
+  if (ifa->pa_priority != new->pa_priority)
+  {
+    OSPF_TRACE(D_EVENTS, "Changing prefix assignment priority on interface %s from %d to %d",
+	       ifname, ifa->pa_priority, new->pa_priority);
+    ifa->pa_priority = new->pa_priority;
+  }
+#endif
+
   /* instance_id is not updated - it is part of key */
 
   return 1;
