@@ -748,7 +748,7 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
         pxn->rid = po->router_id;
         pxn->pa_priority = ifa->pa_priority;
         pxn->valid = 1;
-        OSPF_TRACE(D_EVENTS, "From prefix %I/%d, chose prefix %I/%d to assign to interface %s", usp_addr, usp_len, steal_addr, steal_len, ifa->iface->name);
+        OSPF_TRACE(D_EVENTS, "From prefix %I/%d, stole prefix %I/%d to assign to interface %s", usp_addr, usp_len, steal_addr, steal_len, ifa->iface->name);
         change = 1;
         pxchoose_success = 1;
     }
@@ -796,7 +796,7 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
           pxn->rid = po->router_id;
           pxn->pa_priority = ifa->pa_priority;
           pxn->valid = 1;
-          OSPF_TRACE(D_EVENTS, "From prefix %I/%d, chose prefix %I/%d to assign to interface %s", usp_addr, usp_len, px_tmp.addr, px_tmp.len, ifa->iface->name);
+          OSPF_TRACE(D_EVENTS, "From prefix %I/%d, split prefix %I/%d to assign to interface %s", usp_addr, usp_len, px_tmp.addr, px_tmp.len, ifa->iface->name);
           change = 1;
           pxchoose_success = 1;
           break;
