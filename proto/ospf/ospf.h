@@ -610,7 +610,7 @@ struct ospf_lsa_ac /* must contain at least one TLV */
   u16 length;
   u16 type;
 # endif
-  u32 rest[];
+  u32 value[];
 };
 
 /* Auto-Configuration LSA Type-Length-Value (TLV) types */
