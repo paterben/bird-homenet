@@ -419,6 +419,7 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
   struct proto *p = &po->proto;
   //struct ospf_neighbor *neigh;
   //struct ospf_usp *usp;
+  struct ospf_iface *ifa2;
   struct ospf_lsa_ac_tlv_v_usp *usp2;
   struct ospf_lsa_ac_tlv_v_asp *asp;
   struct ospf_lsa_ac_tlv_v_iasp *iasp;
@@ -553,8 +554,8 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
   {
     PARSE_LSA_AC_IASP_START(iasp, en)
     {
-      if(iasp->pa_priority >= ifa->pa_priority)
-      {
+      if(en->lsa.rt != po->router_id && iasp->pa_priority >= ifa->pa_priority)
+      {  // don't check our own LSAs
         PARSE_LSA_AC_ASP_START(asp, iasp)
         {
           ip_addr addr;
@@ -589,6 +590,46 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
       }
     }
     PARSE_LSA_AC_IASP_BREAKIF(deassigned_prefix, en);
+
+    // also check our other assignments to see if this one is valid.
+    // This should be useless: we should never have made a colliding assignment
+    // without deleting this one in the first place
+    if(!deassigned_prefix)
+    {
+      WALK_LIST(ifa2, po->iface_list)
+      {
+        if(ifa->oa == oa)
+        {
+          WALK_LIST(n, ifa2->asp_list)
+          {
+            if(n->rid == po->router_id)
+            {
+              // these 3 cases should be impossible:
+              //   same priority, same RID, same assigned prefix, different interface
+              //   same priority, same RID, strictly longer assigned prefix
+              //   higher priority, same RID, any type of collision
+              if((ifa2->pa_priority == ifa->pa_priority && net_in_net(n->px.addr, n->px.len, self_r_px->px.addr, self_r_px->px.len)
+                  && (ipa_equal(n->px.addr, self_r_px->px.addr) && n->px.len == self_r_px->px.len) && ifa != ifa2)
+                 || (ifa2->pa_priority == ifa->pa_priority && net_in_net(n->px.addr, n->px.len, self_r_px->px.addr, self_r_px->px.len)
+                  && (!ipa_equal(n->px.addr, self_r_px->px.addr) || n->px.len != self_r_px->px.len))
+                 || (ifa2->pa_priority > ifa->pa_priority && (net_in_net(n->px.addr, n->px.len, self_r_px->px.addr, self_r_px->px.len)
+                                                              || net_in_net(self_r_px->px.addr, self_r_px->px.len, n->px.addr, n->px.len))))
+              {
+                die("Bug in prefix assignment algorithm: forgot to remove a prefix when assigning new one");
+                /*OSPF_TRACE(D_EVENTS, "Interface %s: own assignment %I/%d collides with %I/%d, removing", ifa->iface->name, self_r_px->px.addr, self_r_px->px.len, addr, len);
+                rem_node(NODE self_r_px);
+                mb_free(self_r_px);
+                deassigned_prefix = 1;
+                change = 1;
+                // FIXME deassign prefix from interface
+                break;*/
+              }
+            }
+          }
+          // if(deassigned_prefix) break;
+        }
+      }
+    }
 
     if(!deassigned_prefix && self_r_px->px.len == LSA_AC_ASP_D_SUB_PREFIX_LENGTH)
     {
@@ -760,21 +801,18 @@ find_used(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, list *
 
   PARSE_LSA_AC_IASP_START(iasp, en)
   {
-    PARSE_LSA_AC_ASP_START(asp, iasp)
+    if(en->lsa.rt != po->router_id) // don't check our own LSAs
     {
-      ip_addr addr;
-      unsigned int len;
-      u8 pxopts;
-      u16 rest;
-
-      lsa_get_ipv6_prefix((u32 *)(asp) , &addr, &len, &pxopts, &rest);
-      // test if assigned prefix is part of current usable prefix
-      if(net_in_net(addr, len, usp_addr, usp_len))
+      PARSE_LSA_AC_ASP_START(asp, iasp)
       {
-        // check we are not considering the /80 we already assigned, if any
-        if(!self_r_px
-           || (!ipa_equal(self_r_px->px.addr, addr) || self_r_px->px.len != len
-               || en->lsa.rt != po->router_id || iasp->id != ifa->iface->index))
+        ip_addr addr;
+        unsigned int len;
+        u8 pxopts;
+        u16 rest;
+
+        lsa_get_ipv6_prefix((u32 *)(asp) , &addr, &len, &pxopts, &rest);
+        // test if assigned prefix is part of current usable prefix
+        if(net_in_net(addr, len, usp_addr, usp_len))
         {
           /* add prefix to list of used prefixes */
           pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
@@ -802,27 +840,24 @@ find_used(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, list *
           }
         }
       }
+      PARSE_LSA_AC_ASP_END;
     }
-    PARSE_LSA_AC_ASP_END;
   }
   PARSE_LSA_AC_IASP_END(en);
 
-  /* we also check our own interfaces for assigned prefixes which have not yet had time
-     to be inserted in LSADB. Alternative would be to originate AC LSA immediately
-     at each change instead of simply scheduling origination, but would require some fiddling
-     as we are in the middle of walking the USPs in the LSADB. */
+  /* we also check our own interfaces for assigned prefixes */
   WALK_LIST(ifa2, po->iface_list)
   {
     if(ifa2->oa == oa)
     {
       WALK_LIST(n, ifa2->asp_list)
       {
-        if(net_in_net(n->px.addr, n->px.len, usp_addr, usp_len))
+        if(n->rid == po->router_id && net_in_net(n->px.addr, n->px.len, usp_addr, usp_len))
         {
           // check we are not considering the /80 we already assigned, if any
           if(!self_r_px
-             || (!ipa_equal(self_r_px->px.addr, n->px.addr) || self_r_px->px.len != n->px.len
-                 || n->rid != po->router_id))
+             || (!ipa_equal(self_r_px->px.addr, n->px.addr) || self_r_px->px.len != n->px.len)
+             || ifa != ifa2)
           {
             /* add prefix to list of used prefixes */
             pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
@@ -831,6 +866,23 @@ find_used(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, list *
             pxn->px.len = n->px.len;
             pxn->rid = n->rid;
             pxn->pa_priority = ifa2->pa_priority;
+
+            // test if assigned prefix is stealable
+            if(ifa2->pa_priority < *lowest_pa_priority)
+            {
+              *steal_addr = ipa_and(n->px.addr,ipa_mkmask(LSA_AC_ASP_D_PREFIX_LENGTH));
+              *steal_len = LSA_AC_ASP_D_PREFIX_LENGTH;
+              *lowest_pa_priority = ifa2->pa_priority;
+              *found_steal = 1;
+            }
+
+            // test if assigned prefix is splittable
+            if(!*found_split && ifa2->pa_priority == ifa->pa_priority && n->px.len == LSA_AC_ASP_D_PREFIX_LENGTH)
+            {
+              *split_addr = n->px.addr;
+              *split_len = n->px.len;
+              *found_split = 1;
+            }
           }
         }
       }
@@ -839,7 +891,7 @@ find_used(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, list *
 }
 
 /**
- * try_reuse_d - Try to reuse an unused prefix of specified @length in memory
+ * try_reuse - Try to reuse an unused prefix of specified @length in memory
  */
 static void
 try_reuse(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, list *used,
@@ -921,8 +973,8 @@ try_steal(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, ip_add
   // has already stolen (conservative policy)
   PARSE_LSA_AC_IASP_START(iasp, en)
   {
-    if(iasp->pa_priority > *lowest_pa_priority)
-    {
+    if(en->lsa.rt != po->router_id && iasp->pa_priority > *lowest_pa_priority)
+    {  // don't check our own LSAs
       PARSE_LSA_AC_ASP_START(asp, iasp)
       {
         ip_addr addr;
@@ -932,11 +984,7 @@ try_steal(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, ip_add
 
         lsa_get_ipv6_prefix((u32 *)(asp) , &addr, &len, &pxopts, &rest);
         if((net_in_net(addr, len, *steal_addr, *steal_len)
-            || net_in_net(*steal_addr, *steal_len, addr, len))
-           // check we are not considering our own /80 assignment for this interface, if any
-           && (!self_r_px
-               || (!ipa_equal(self_r_px->px.addr, addr) || self_r_px->px.len != len
-                   || en->lsa.rt != po->router_id || iasp->id != ifa->iface->index)))
+            || net_in_net(*steal_addr, *steal_len, addr, len)))
           *found_steal = 0;
       }
       PARSE_LSA_AC_ASP_BREAKIF(!*found_steal);
@@ -945,7 +993,7 @@ try_steal(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, ip_add
   PARSE_LSA_AC_IASP_BREAKIF(!*found_steal, en);
 
   // we also need to check that we have not already stolen/split the prefix
-  // ourselves and not had time to put it in LSADB...
+  // ourselves...
   if(*found_steal)
   {
     WALK_LIST(ifa2, po->iface_list)
@@ -954,15 +1002,18 @@ try_steal(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, ip_add
       {
         WALK_LIST(n, ifa2->asp_list)
         {
-          if((net_in_net(n->px.addr, n->px.len, *steal_addr, *steal_len)
-              || net_in_net(*steal_addr, *steal_len, n->px.addr, n->px.len))
-             // check we are not considering the /80 we already assigned, if any
-             && (!self_r_px
-                 || (!ipa_equal(self_r_px->px.addr, n->px.addr) || self_r_px->px.len != n->px.len
-                     || n->rid != po->router_id)))
+          if(n->rid == po->router_id)
           {
-            if(ifa2->pa_priority > *lowest_pa_priority)
-              *found_steal = 0;
+            if((net_in_net(n->px.addr, n->px.len, *steal_addr, *steal_len)
+                || net_in_net(*steal_addr, *steal_len, n->px.addr, n->px.len))
+               // check we are not considering the /80 we already assigned, if any
+               && (!self_r_px
+                   || (!ipa_equal(self_r_px->px.addr, n->px.addr) || self_r_px->px.len != n->px.len)
+                   || ifa != ifa2))
+            {
+              if(ifa2->pa_priority > *lowest_pa_priority)
+                *found_steal = 0;
+            }
           }
         }
       }
@@ -1042,8 +1093,8 @@ try_split(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, ip_add
   // and no one with a strictly higher priority collides
   PARSE_LSA_AC_IASP_START(iasp, en)
   {
-    if(iasp->pa_priority >= ifa->pa_priority)
-    {
+    if(en->lsa.rt != po->router_id && iasp->pa_priority >= ifa->pa_priority)
+    {  // don't check our own LSAs
       PARSE_LSA_AC_ASP_START(asp, iasp)
       {
         ip_addr addr;
@@ -1074,13 +1125,16 @@ try_split(struct ospf_iface *ifa, ip_addr usp_addr, unsigned int usp_len, ip_add
       {
         WALK_LIST(n, ifa2->asp_list)
         {
-          if(ifa2->pa_priority > ifa->pa_priority && (net_in_net(n->px.addr, n->px.len, *split_addr, *split_len)
-                                                       || net_in_net(*split_addr, *split_len, n->px.addr, n->px.len)))
-            *found_split = 0;
-          if(ifa2->pa_priority == ifa->pa_priority && (net_in_net(n->px.addr, n->px.len, *split_addr, *split_len))
-                                                   && (!ipa_equal(n->px.addr, *split_addr) || n->px.len != *split_len))
-            *found_split = 0;
-          if(!*found_split) break;
+          if(n->rid == po->router_id)
+          {
+            if(ifa2->pa_priority > ifa->pa_priority && (net_in_net(n->px.addr, n->px.len, *split_addr, *split_len)
+                                                         || net_in_net(*split_addr, *split_len, n->px.addr, n->px.len)))
+              *found_split = 0;
+            if(ifa2->pa_priority == ifa->pa_priority && (net_in_net(n->px.addr, n->px.len, *split_addr, *split_len))
+                                                     && (!ipa_equal(n->px.addr, *split_addr) || n->px.len != *split_len))
+              *found_split = 0;
+            if(!*found_split) break;
+          }
         }
         if(!*found_split) break;
       }
