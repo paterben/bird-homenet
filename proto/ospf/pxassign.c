@@ -455,8 +455,8 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
   }*/
 
   /* 5.3.2a */
-  int have_highest_pa_priority = 0;
-  u8 highest_pa_priority = 0;
+  int have_highest_link_pa_priority = 0;
+  u8 highest_link_pa_priority = 0;
   WALK_LIST(neigh, ifa->neigh_list)
   {
     if(neigh->state >= NEIGHBOR_INIT)
@@ -466,17 +466,17 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
         if(iasp->id == neigh->iface_id)
         {
           neigh->pa_priority = iasp->pa_priority; // store for future reference
-          if(iasp->pa_priority > highest_pa_priority)
-            highest_pa_priority = iasp->pa_priority;
+          if(iasp->pa_priority > highest_link_pa_priority)
+            highest_link_pa_priority = iasp->pa_priority;
         }
       }
       PARSE_LSA_AC_IASP_ROUTER_END(en);
     }
   }
-  if(highest_pa_priority <= ifa->pa_priority)
+  if(highest_link_pa_priority <= ifa->pa_priority)
   {
-    highest_pa_priority = ifa->pa_priority;
-    have_highest_pa_priority = 1;
+    highest_link_pa_priority = ifa->pa_priority;
+    have_highest_link_pa_priority = 1;
   }
 
   /* 5.3.2b */
@@ -495,7 +495,7 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
   u32 neigh_rid = 0;
   WALK_LIST(neigh, ifa->neigh_list)
   {
-    if(neigh->pa_priority == highest_pa_priority && neigh->rid > neigh_rid && neigh->state >= NEIGHBOR_INIT)
+    if(neigh->pa_priority == highest_link_pa_priority && neigh->rid > neigh_rid && neigh->state >= NEIGHBOR_INIT)
     {
       PARSE_LSA_AC_IASP_ROUTER_START(neigh->rid, iasp, en)
       {
@@ -526,7 +526,7 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
 
   /* 5.3.2d */
   int have_assignment_resp = 0;
-  if(ifa->pa_priority == highest_pa_priority && po->router_id > neigh_rid)
+  if(ifa->pa_priority == highest_link_pa_priority && po->router_id > neigh_rid)
   {
     struct prefix usp_px;
     usp_px.addr = usp_addr;
@@ -539,18 +539,18 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
   /* 5.3.3 */
   // exactly one of the following will be executed:
   // step 4 will be executed if:
-  //   have_highest_pa_priority && have_assignment_resp
+  //   have_highest_link_pa_priority && have_assignment_resp
   // step 5 will be executed if:
-  //   (!have_assignment_resp || !have_highest_pa_priority) && assignment_found
+  //   (!have_assignment_resp || !have_highest_link_pa_priority) && assignment_found
   // step 6 will be executed if:
-  //   have_highest_pa_priority && have_highest_rid && !have_assignment_resp && !assignment_found
-  if((!have_highest_pa_priority || (!have_assignment_resp && !have_highest_rid)) && !assignment_found)
+  //   have_highest_link_pa_priority && have_highest_rid && !have_assignment_resp && !assignment_found
+  if((!have_highest_link_pa_priority || (!have_assignment_resp && !have_highest_rid)) && !assignment_found)
     return change; // go to next interface
 
   /* 5.3.4 */
   // we already have an assignment but must check whether it is valid and whether there is better
   int deassigned_prefix = 0; // whether we had to remove our own assignment
-  if(have_highest_pa_priority && have_assignment_resp)
+  if(have_highest_link_pa_priority && have_assignment_resp)
   {
     PARSE_LSA_AC_IASP_START(iasp, en)
     {
@@ -684,26 +684,79 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
 
   /* 5.3.5 */
   // we must check whether we are aware of someone else's assignment
-  if((!have_assignment_resp || !have_highest_pa_priority) && assignment_found)
+  if((!have_assignment_resp || !have_highest_link_pa_priority) && assignment_found)
   {
     int found = 0; // whether assignment is already in the ifa's asp_list
     WALK_LIST(n,ifa->asp_list)
     {
       if(ipa_equal(n->px.addr, neigh_r_addr) && n->px.len == neigh_r_len
-         && n->rid == neigh_rid && n->pa_priority == highest_pa_priority)
+         && n->rid == neigh_rid && n->pa_priority == highest_link_pa_priority)
       {
         found = 1;
         n->valid = 1;
       }
     }
+
+    // if it's not already there, we must run some extra checks to see if we can assign it.
+    // it can only collide with a single existing assignment (if we didn't do anything stupid
+    // before), so we check to see which of the maximum two assignments wins
+    // cases where the old assignment wins:
+    //   it has a strictly higher pa_priority
+    //   it has the same pa_priority and a strictly longer prefix
+    //   it has the same pa_priority, same prefix and higher RID
     if(!found)
     {
-      OSPF_TRACE(D_EVENTS, "Interface %s: Adding %R's assignment %I/%d with priority %d", ifa->iface->name, neigh_rid, neigh_r_addr, neigh_r_len, highest_pa_priority);
+      int collision_found = 0;
+      WALK_LIST(ifa2, po->iface_list)
+      {
+        if(ifa2->oa == oa)
+        {
+          WALK_LIST_DELSAFE(n, pxn, ifa2->asp_list)
+          {
+            if(net_in_net(n->px.addr, n->px.len, neigh_r_addr, neigh_r_len)
+               || net_in_net(neigh_r_addr, neigh_r_len, n->px.addr, n->px.len))
+            {
+              collision_found = 1;
+              if(n->pa_priority > highest_link_pa_priority
+                 || (n->pa_priority == highest_link_pa_priority && net_in_net(n->px.addr, n->px.len, neigh_r_addr, neigh_r_len)
+                     && (!ipa_equal(neigh_r_addr, n->px.addr) || neigh_r_len != n->px.len))
+                 || (n->pa_priority == highest_link_pa_priority && (ipa_equal(neigh_r_addr, n->px.addr) && neigh_r_len == n->px.len)
+                     && po->router_id > neigh_rid))
+              {
+                found = 1;
+                OSPF_TRACE(D_EVENTS, "Interface %s: Refused %R's assignment %I/%d with priority %d, we have interface %s assignment %I/%d with priority %d",
+                                     ifa->iface->name, neigh_rid, neigh_r_addr, neigh_r_len, highest_link_pa_priority, ifa2->iface->name, n->px.addr, n->px.len, n->pa_priority);
+                // we will have no assignment on this interface, but we don't know who's responsible.
+                // this might be a vulnerability: if the neighbor is ill-intentioned and
+                // never removes his assignment, no prefix will ever be assigned on this interface.
+                // it would be possible to run some additional steps to see if we are responsible here.
+                // under normal conditions, the neighbor will eventually remove his assignment.
+              }
+              else
+              {
+                OSPF_TRACE(D_EVENTS, "Interface %s: To add %R's assignment %I/%d with priority %d, must remove interface %s assignment %I/%d with priority %d",
+                                     ifa->iface->name, neigh_rid, neigh_r_addr, neigh_r_len, highest_link_pa_priority, ifa2->iface->name, n->px.addr, n->px.len, n->pa_priority);
+                if(n->rid == po->router_id)
+                  change = 1;
+                rem_node(NODE n);
+                mb_free(n);
+                // FIXME remove assignment from interface
+              }
+            }
+          }
+          if(collision_found) break;
+        }
+      }
+    }
+
+    if(!found)
+    {
+      OSPF_TRACE(D_EVENTS, "Interface %s: Adding %R's assignment %I/%d with priority %d", ifa->iface->name, neigh_rid, neigh_r_addr, neigh_r_len, highest_link_pa_priority);
       pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
       pxn->px.addr = neigh_r_addr;
       pxn->px.len = neigh_r_len;
       pxn->rid = neigh_rid;
-      pxn->pa_priority = highest_pa_priority;
+      pxn->pa_priority = highest_link_pa_priority;
       pxn->valid = 1;
       add_tail(&ifa->asp_list, NODE pxn);
       // FIXME do physical prefix assignment
@@ -713,7 +766,7 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
   /* 5.3.6 */
   // we must assign a new prefix
   if(deassigned_prefix
-     || (have_highest_pa_priority && !have_assignment_resp && !assignment_found && have_highest_rid))
+     || (have_highest_link_pa_priority && !have_assignment_resp && !assignment_found && have_highest_rid))
   {
     list used; /* list of struct prefix_node */
     init_list(&used);
