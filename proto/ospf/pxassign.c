@@ -698,20 +698,21 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
     }
 
     // if it's not already there, we must run some extra checks to see if we can assign it.
-    // it can only collide with a single existing assignment (if we didn't do anything stupid
-    // before), so we check to see which of the maximum two assignments wins
-    // cases where the old assignment wins:
-    //   it has a strictly higher pa_priority
-    //   it has the same pa_priority and a strictly longer prefix
-    //   it has the same pa_priority, same prefix and higher RID
+    // parse all interface's asp_lists twice: once to determine if the new assignment takes
+    // priority, second to remove all colliding assignments if it does
+    // cases an existing assignment wins and new one must be refused:
+    //   existing has a strictly higher pa_priority
+    //   existing has the same pa_priority and a strictly longer prefix
+    //   existing has the same pa_priority, same prefix and higher RID
+    int refused = 0;
+    int collision_found = 0;
     if(!found)
     {
-      int collision_found = 0;
       WALK_LIST(ifa2, po->iface_list)
       {
         if(ifa2->oa == oa)
         {
-          WALK_LIST_DELSAFE(n, pxn, ifa2->asp_list)
+          WALK_LIST(n, ifa2->asp_list)
           {
             if(net_in_net(n->px.addr, n->px.len, neigh_r_addr, neigh_r_len)
                || net_in_net(neigh_r_addr, neigh_r_len, n->px.addr, n->px.len))
@@ -723,33 +724,48 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
                  || (n->pa_priority == highest_link_pa_priority && (ipa_equal(neigh_r_addr, n->px.addr) && neigh_r_len == n->px.len)
                      && po->router_id > neigh_rid))
               {
-                found = 1;
+                refused = 1;
                 OSPF_TRACE(D_EVENTS, "Interface %s: Refused %R's assignment %I/%d with priority %d, we have interface %s assignment %I/%d with priority %d",
                                      ifa->iface->name, neigh_rid, neigh_r_addr, neigh_r_len, highest_link_pa_priority, ifa2->iface->name, n->px.addr, n->px.len, n->pa_priority);
+                break;
                 // we will have no assignment on this interface, but we don't know who's responsible.
                 // this might be a vulnerability: if the neighbor is ill-intentioned and
                 // never removes his assignment, no prefix will ever be assigned on this interface.
                 // it would be possible to run some additional steps to see if we are responsible here.
                 // under normal conditions, the neighbor will eventually remove his assignment.
               }
-              else
-              {
-                OSPF_TRACE(D_EVENTS, "Interface %s: To add %R's assignment %I/%d with priority %d, must remove interface %s assignment %I/%d with priority %d",
-                                     ifa->iface->name, neigh_rid, neigh_r_addr, neigh_r_len, highest_link_pa_priority, ifa2->iface->name, n->px.addr, n->px.len, n->pa_priority);
-                if(n->rid == po->router_id)
-                  change = 1;
-                rem_node(NODE n);
-                mb_free(n);
-                // FIXME remove assignment from interface
-              }
             }
           }
-          if(collision_found) break;
+          if(refused) break;
+        }
+      }
+    }
+    if(!refused && collision_found)
+    {
+      // delete all colliding assignments on interfaces
+      WALK_LIST(ifa2, po->iface_list)
+      {
+        if(ifa2->oa == oa)
+        {
+          WALK_LIST_DELSAFE(n, pxn, ifa2->asp_list)
+          {
+            if(net_in_net(n->px.addr, n->px.len, neigh_r_addr, neigh_r_len)
+               || net_in_net(neigh_r_addr, neigh_r_len, n->px.addr, n->px.len))
+            {
+              OSPF_TRACE(D_EVENTS, "Interface %s: To add %R's assignment %I/%d with priority %d, must delete interface %s assignment %I/%d with priority %d",
+                                   ifa->iface->name, neigh_rid, neigh_r_addr, neigh_r_len, highest_link_pa_priority, ifa2->iface->name, n->px.addr, n->px.len, n->pa_priority);
+              if(n->rid == po->router_id)
+                change = 1;
+              rem_node(NODE n);
+              mb_free(n);
+              // FIXME deassign prefix from interface
+            }
+          }
         }
       }
     }
 
-    if(!found)
+    if(!found && !refused)
     {
       OSPF_TRACE(D_EVENTS, "Interface %s: Adding %R's assignment %I/%d with priority %d", ifa->iface->name, neigh_rid, neigh_r_addr, neigh_r_len, highest_link_pa_priority);
       pxn = mb_alloc(ifa->pool, sizeof(struct prefix_node));
