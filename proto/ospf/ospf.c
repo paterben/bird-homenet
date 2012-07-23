@@ -568,7 +568,6 @@ ospf_disp(timer * timer)
   /* Perform prefix assignment if needed */
   if(po->pxassignment && po->pxassign)
   {
-    //ospf_pxcr(po);
     ospf_pxassign(po);
     po->pxassign = 0;
   }

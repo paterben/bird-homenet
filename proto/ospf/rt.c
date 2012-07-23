@@ -1,14 +1,14 @@
 /*
  * BIRD -- OSPF
- * 
+ *
  * (c) 2000--2004 Ondrej Filip <feela@network.cz>
- * 
+ *
  * Can be freely distributed and used under the terms of the GNU GPL.
  */
 
 #include "ospf.h"
 
-static void add_cand(list * l, struct top_hash_entry *en, 
+static void add_cand(list * l, struct top_hash_entry *en,
 		     struct top_hash_entry *par, u32 dist,
 		     struct ospf_area *oa, int i);
 static void rt_sync(struct proto_ospf *po);
@@ -285,7 +285,7 @@ add_network(struct ospf_area *oa, ip_addr px, int pxlen, int metric, struct top_
 
   if (en == oa->rt)
   {
-    /* 
+    /*
      * Local stub networks does not have proper iface in en->nhi
      * (because they all have common top_hash_entry en).
      * We have to find iface responsible for that stub network.
@@ -622,7 +622,7 @@ link_back(struct ospf_area *oa, struct top_hash_entry *en, struct top_hash_entry
   return 0;
 }
 
-  
+
 /* RFC 2328 16.2. calculating inter-area routes */
 static void
 ospf_rt_sum(struct ospf_area *oa)
@@ -691,10 +691,10 @@ ospf_rt_sum(struct ospf_area *oa)
       options = 0;
 #else /* OSPFv3 */
       struct ospf_lsa_sum_rt *ls = en->lsa_body;
-      dst_rid = ls->drid; 
+      dst_rid = ls->drid;
       options = ls->options & OPTIONS_MASK;
 #endif
-      
+
       /* We don't want local router in ASBR routing table */
       if (dst_rid == po->router_id)
 	continue;
@@ -806,7 +806,7 @@ ospf_rt_sum_tr(struct ospf_area *oa)
       dst_rid = en->lsa.id;
 #else /* OSPFv3 */
       struct ospf_lsa_sum_rt *ls = en->lsa_body;
-      dst_rid = ls->drid; 
+      dst_rid = ls->drid;
 #endif
 
       metric = ls->metric & METRIC_MASK;
@@ -814,9 +814,9 @@ ospf_rt_sum_tr(struct ospf_area *oa)
       re = fib_find(&bb->rtr, &ip, MAX_PREFIX_LENGTH);
     }
 
-    /* 16.3 (1b) */ 
-    if (metric == LSINFINITY) 
-      continue; 
+    /* 16.3 (1b) */
+    if (metric == LSINFINITY)
+      continue;
 
     /* 16.3 (3) */
     if (!re || !re->n.type)
@@ -837,7 +837,7 @@ ospf_rt_sum_tr(struct ospf_area *oa)
     metric = abr->n.metric1 + metric; /* IAC */
 
     /* 16.3. (5) */
-    if ((metric < re->n.metric1) || 
+    if ((metric < re->n.metric1) ||
 	((metric == re->n.metric1) && unresolved_vlink(re->n.nhs)))
     {
       /* We want to replace the next-hop even if the metric is equal
@@ -923,7 +923,7 @@ decide_sum_lsa(struct ospf_area *oa, ort *nf, int dest)
   struct area_net *anet = (struct area_net *)
     fib_route(&nf->n.oa->net_fib, nf->fn.prefix, nf->fn.pxlen);
 
-  /* Condensed area network found */ 
+  /* Condensed area network found */
   if (anet)
     return 0;
 
@@ -988,7 +988,7 @@ decide_nssa_lsa(ort *nf, u32 *rt_metric, ip_addr *rt_fwaddr, u32 *rt_tag)
   if (!rt_is_nssa(nf) || !oa->translate)
     return 0;
 
-  /* Condensed area network found */ 
+  /* Condensed area network found */
   if (fib_route(&oa->enet_fib, nf->fn.prefix, nf->fn.pxlen))
     return 0;
 
@@ -1223,7 +1223,7 @@ static void
 translator_timer_hook(timer *timer)
 {
   struct ospf_area *oa = timer->data;
-  
+
   if (oa->translate != TRANS_WAIT)
     return;
 
@@ -1414,7 +1414,7 @@ ospf_ext_spf(struct proto_ospf *po)
     rt_fwaddr_valid = le->metric & LSA_EXT_FBIT;
     if (rt_fwaddr_valid)
       buf = lsa_get_ipv6_addr(buf, &rt_fwaddr);
-    else 
+    else
       rt_fwaddr = IPA_NONE;
 
     if (le->metric & LSA_EXT_TBIT)
@@ -1636,7 +1636,12 @@ ospf_rt_spf(struct proto_ospf *po)
 
   rt_sync(po);
   lp_flush(po->nhpool);
-  
+
+#ifdef OSPFv3
+  if(po->pxassignment)
+    schedule_pxassign(po);
+#endif
+
   po->calcrt = 0;
 }
 
@@ -1666,7 +1671,7 @@ calc_next_hop(struct ospf_area *oa, struct top_hash_entry *en,
   if (inherit_nexthops(pn))
     return pn;
 
-  /* 
+  /*
    * There are three cases:
    * 1) en is a local network (and par is root)
    * 2) en is a ptp or ptmp neighbor (and par is root)
@@ -1729,7 +1734,7 @@ calc_next_hop(struct ospf_area *oa, struct top_hash_entry *en,
       return NULL;
 
     struct ospf_lsa_link *llsa = lhe->lsa_body;
-      
+
     if (ipa_zero(llsa->lladdr))
       return NULL;
 
@@ -1872,7 +1877,7 @@ add_cand(list * l, struct top_hash_entry *en, struct top_hash_entry *par,
      * gateway nexthops only. We prefer device nexthops over gateway
      * nexthops and gateway nexthops over vlink nexthops. We either
      * keep old nexthops, merge old and new, or replace old with new.
-     * 
+     *
      * We know that en->color == CANDIDATE and en->nhs is defined.
      */
     struct mpnh *onhs = en->nhs;
