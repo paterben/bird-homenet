@@ -172,8 +172,9 @@ static void
 ospf_usp_add_manual(struct prefix px)
 {
   if(px.len < LSA_AC_USP_MIN_PREFIX_LENGTH || px.len > LSA_AC_USP_MAX_PREFIX_LENGTH)
-    cf_error( "Usable prefixes must be longer than LSA_AC_USP_MIN_PREFIX_LENGTH \
-               bits and shorter than LSA_AC_USP_MAX_PREFIX_LENGTH bits");
+    cf_error( "Usable prefixes must be longer than %d \
+               bits and shorter than %d bits",
+               LSA_AC_USP_MIN_PREFIX_LENGTH, LSA_AC_USP_MAX_PREFIX_LENGTH);
   this_usp = cfg_allocz(sizeof(struct prefix_node));
   add_tail(&OSPF_CFG->usp_list, NODE this_usp);
   this_usp->px.addr = px.addr;
@@ -203,9 +204,20 @@ set_pa_priority(unsigned p)
 {
 #ifdef OSPFv3
   OSPF_PATT->pa_priority = p;
-  if(p <= 0 || p > 255) cf_error("Prefix assignment priority must be in range 1-255");
+  if(p < 1 || p > 255) cf_error("Prefix assignment priority must be in range 1-255");
 #else
   cf_error("Prefix assignment priority requires OSPFv3");
+#endif
+}
+
+static inline void
+set_pa_pxlen(unsigned p)
+{
+#ifdef OSPFv3
+  OSPF_PATT->pa_pxlen = p;
+  if(p != PA_PXLEN_D && p != PA_PXLEN_SUB) cf_error("Prefix assignment length must be %d or %d", PA_PXLEN_D, PA_PXLEN_SUB);
+#else
+  cf_error("Prefix assignment length requires OSPFv3");
 #endif
 }
 
@@ -220,7 +232,7 @@ CF_KEYWORDS(ELIGIBLE, POLL, NETWORKS, HIDDEN, VIRTUAL, CHECK, LINK)
 CF_KEYWORDS(RX, BUFFER, LARGE, NORMAL, STUBNET, HIDDEN, SUMMARY, TAG, EXTERNAL)
 CF_KEYWORDS(WAIT, DELAY, LSADB, ECMP, LIMIT, WEIGHT, NSSA, TRANSLATOR, STABILITY)
 CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, INSTANCE, REAL)
-CF_KEYWORDS(DUPLICATE, RID, DETECTION, USABLEPREFIX, ASSIGNMENT)
+CF_KEYWORDS(DUPLICATE, RID, DETECTION, USABLEPREFIX, ASSIGNMENT, LENGTH)
 
 %type <t> opttext
 %type <ld> lsadb_args
@@ -392,6 +404,7 @@ ospf_iface_item:
  | RX BUFFER expr { OSPF_PATT->rxbuf = $3 ; if (($3 < OSPF_RXBUF_MINSIZE) || ($3 > OSPF_MAX_PKT_SIZE)) cf_error("Buffer size must be in range 256-65535"); }
  | password_list
  | PREFIX ASSIGNMENT PRIORITY expr { set_pa_priority($4); }
+ | PREFIX ASSIGNMENT LENGTH expr { set_pa_pxlen($4); }
  ;
 
 pref_list:
@@ -455,6 +468,7 @@ ospf_iface_start:
   OSPF_PATT->inftransdelay = INFTRANSDELAY_D;
   OSPF_PATT->priority = PRIORITY_D;
   OSPF_PATT->pa_priority = PA_PRIORITY_D;
+  OSPF_PATT->pa_pxlen = PA_PXLEN_D;
   OSPF_PATT->waitint = WAIT_DMH*HELLOINT_D;
   OSPF_PATT->deadc = DEADC_D;
   OSPF_PATT->deadint = 0;

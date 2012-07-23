@@ -501,7 +501,7 @@ lsa_validate_ac_tlv_asp(u8 *tlvh)
 
   struct ospf_lsa_ac_tlv_v_asp *tlv = (struct ospf_lsa_ac_tlv_v_asp *) (tlvh + sizeof(struct ospf_lsa_ac));
 
-  if(tlv->pxlen < LSA_AC_ASP_MIN_PREFIX_LENGTH || tlv->pxlen > LSA_AC_ASP_MAX_PREFIX_LENGTH)
+  if(tlv->pxlen != LSA_AC_ASP_D_PREFIX_LENGTH && tlv->pxlen != LSA_AC_ASP_SUB_PREFIX_LENGTH)
     return 0;
 
   /* FIXME other tests on prefix / interface ID? */
@@ -520,6 +520,9 @@ lsa_validate_ac_tlv_iasp(u8 *tlvh)
   struct ospf_lsa_ac_tlv_v_iasp *iasp = (struct ospf_lsa_ac_tlv_v_iasp *) (tlvh + sizeof(struct ospf_lsa_ac));
 
   if(iasp->pa_priority == 0) // reserved value
+    return 0;
+
+  if(iasp->pa_pxlen != PA_PXLEN_D && iasp->pa_pxlen != PA_PXLEN_SUB)
     return 0;
 
   unsigned int offset = LSA_AC_IASP_OFFSET;

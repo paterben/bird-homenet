@@ -1559,8 +1559,9 @@ add_iasp_tlvs(struct ospf_area *oa)
       iasp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_v_iasp));
       iasp->id = ifa->iface->index;
       iasp->pa_priority = ifa->pa_priority;
-      iasp->reserved8 = 0;
-      iasp->reserved16 = 0;
+      iasp->reserved8_1 = 0;
+      iasp->reserved8_2 = 0;
+      iasp->pa_pxlen = ifa->pa_pxlen;
 
       add_asp_tlvs(ifa);
 

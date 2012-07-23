@@ -1091,40 +1091,16 @@ ospf_sh_iface(struct proto *p, char *iff)
   cli_msg(0, "");
 }
 
-static void
-ospf_sh_iasp_lsa(struct top_hash_entry *en)
-{
-  struct ospf_lsa_ac_tlv *tlv, *tlv2;
-  unsigned int size = en->lsa.length - sizeof(struct ospf_lsa_header);
-  unsigned int offset = 0;
-  while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_IASP)) != NULL)
-  {
-    struct ospf_lsa_ac_tlv_v_iasp *iasp = (struct ospf_lsa_ac_tlv_v_iasp *) tlv->value;
-    unsigned int offset2 = LSA_AC_IASP_OFFSET;
-    u8 pa_priority = iasp->pa_priority;
-    u32 id = iasp->id;
-
-    while((tlv2 = find_next_tlv(iasp, &offset2, tlv->length, LSA_AC_TLV_T_ASP)) != NULL)
-    {
-      struct ospf_lsa_ac_tlv_v_asp *asp = (struct ospf_lsa_ac_tlv_v_asp *) tlv2->value;
-      ip_addr addr;
-      unsigned int len;
-      u8 pxopts;
-      u16 rest;
-
-      lsa_get_ipv6_prefix((u32 *)(asp), &addr, &len, &pxopts, &rest);
-      cli_msg(-1021, "%-20R%-14d%-1I/%-14d%-10d", en->lsa.rt, id, addr, len, pa_priority);
-    }
-  }
-}
-
 void
 ospf_sh_asp(struct proto *p)
 {
 #ifdef OSPFv3
   struct proto_ospf *po = (struct proto_ospf *) p;
+  struct ospf_area *oa;
   struct ospf_iface *ifa;
   struct top_hash_entry *en;
+  struct ospf_lsa_ac_tlv_v_iasp *iasp;
+  struct ospf_lsa_ac_tlv_v_asp *asp;
   struct prefix_node *n;
 
   if (p->proto_state != PS_UP)
@@ -1143,14 +1119,25 @@ ospf_sh_asp(struct proto *p)
   }
   cli_msg(-1021, "");
 
-  cli_msg(-1021, "All assigned prefixes in reachable LSADB");
-  cli_msg(-1021, "%-20s%-14s%-39s%-15s%-10s", "Advertising Router", "Interface ID", "Prefix", "Prefix Length", "Priority");
-  WALK_SLIST(en, po->lsal)
+  WALK_LIST(oa, po->area_list)
   {
-    if(en->lsa.type == LSA_T_AC && ospf_lsa_ac_is_reachable(po, en))
+    cli_msg(-1021, "All assigned prefixes in reachable LSADB for area %d", oa->areaid);
+    cli_msg(-1021, "%-20s%-14s%-39s%-15s%-10s", "Advertising Router", "Interface ID", "Prefix", "Prefix Length", "Priority");
+    PARSE_LSA_AC_IASP_START(iasp,en)
     {
-      ospf_sh_iasp_lsa(en);
+      PARSE_LSA_AC_ASP_START(asp, iasp)
+      {
+        ip_addr addr;
+        unsigned int len;
+        u8 pxopts;
+        u16 rest;
+
+        lsa_get_ipv6_prefix((u32 *)(asp), &addr, &len, &pxopts, &rest);
+        cli_msg(-1021, "%-20R%-14d%-1I/%-14d%-10d", en->lsa.rt, iasp->id, addr, len, iasp->pa_priority);
+      }
+      PARSE_LSA_AC_ASP_END;
     }
+    PARSE_LSA_AC_IASP_END(en);
   }
 
   cli_msg(0, "");

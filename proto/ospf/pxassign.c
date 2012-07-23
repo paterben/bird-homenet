@@ -475,7 +475,10 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
       {
         if(iasp->id == neigh->iface_id)
         {
-          neigh->pa_priority = iasp->pa_priority; // store for future reference
+          // store for future reference
+          neigh->pa_priority = iasp->pa_priority;
+          neigh->pa_pxlen = iasp->pa_pxlen;
+
           if(iasp->pa_priority > highest_link_pa_priority)
             highest_link_pa_priority = iasp->pa_priority;
         }
@@ -641,7 +644,7 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
       }
     }
 
-    if(!deassigned_prefix && self_r_px->px.len == LSA_AC_ASP_D_SUB_PREFIX_LENGTH)
+    if(!deassigned_prefix && self_r_px->px.len == LSA_AC_ASP_SUB_PREFIX_LENGTH)
     {
       // Our assignment is valid. Still, if it is a /80 a /64 would be better.
       // If the prefix is a /80, check if we can assign any /64.
@@ -826,19 +829,19 @@ ospf_pxassign_usp_ifa(struct ospf_iface *ifa, struct ospf_lsa_ac_tlv_v_usp *cusp
     /* 5.3.6e */
     // see if we can find a /80 in memory that is unused
     if(!pxchoose_success && ifa->pa_priority < PA_PRIORITY_MAX)
-      try_reuse(ifa, usp_addr, usp_len, &used, &pxchoose_success, &change, LSA_AC_ASP_D_SUB_PREFIX_LENGTH, NULL);
+      try_reuse(ifa, usp_addr, usp_len, &used, &pxchoose_success, &change, LSA_AC_ASP_SUB_PREFIX_LENGTH, NULL);
 
     /* 5.3.6f */
     // see if we can find an unused /80
     if(!pxchoose_success && ifa->pa_priority < PA_PRIORITY_MAX)
-      try_assign_unused(ifa, usp_addr, usp_len, &used, &pxchoose_success, &change, LSA_AC_ASP_D_SUB_PREFIX_LENGTH, NULL);
+      try_assign_unused(ifa, usp_addr, usp_len, &used, &pxchoose_success, &change, LSA_AC_ASP_SUB_PREFIX_LENGTH, NULL);
 
     /* 5.3.6g */
     // try to split a /64
     if(!pxchoose_success && found_split && ifa->pa_priority < PA_PRIORITY_MAX)
     {
       try_split(ifa, usp_addr, usp_len, &split_addr, &split_len,
-          &found_split, &pxchoose_success, &change, LSA_AC_ASP_D_SUB_PREFIX_LENGTH);
+          &found_split, &pxchoose_success, &change, LSA_AC_ASP_SUB_PREFIX_LENGTH);
     }
 
     /* 5.3.6h */

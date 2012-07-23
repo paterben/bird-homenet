@@ -543,6 +543,7 @@ ospf_iface_new(struct ospf_area *oa, struct ifa *addr, struct ospf_iface_patt *i
 #ifdef OSPFv3
   ifa->instance_id = ip->instance_id;
   ifa->pa_priority = ip->pa_priority;
+  ifa->pa_pxlen = ip->pa_pxlen;
 #endif
 
   ifa->type = ospf_iface_classify(ip->type, addr);
@@ -649,6 +650,11 @@ ospf_iface_reconfigure(struct ospf_iface *ifa, struct ospf_iface_patt *new)
 
   if (new->real_bcast != ifa->cf->real_bcast)
     return 0;
+
+#ifdef OSPFv3
+  if(new->pa_pxlen != ifa->pa_pxlen)
+    return 0;
+#endif
 
   ifa->cf = new;
   ifa->marked = 0;

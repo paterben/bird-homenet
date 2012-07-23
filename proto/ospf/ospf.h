@@ -258,7 +258,10 @@ struct ospf_iface
 #define PA_PRIORITY_MIN 1
 #define PA_PRIORITY_D 10
 #define PA_PRIORITY_MAX 255
-  u8 pa_priority;              /* Used in prefix assignment algorithm */
+#define PA_PXLEN_D LSA_AC_ASP_D_PREFIX_LENGTH
+#define PA_PXLEN_SUB LSA_AC_ASP_SUB_PREFIX_LENGTH
+  u8 pa_priority;               /* Used in prefix assignment algorithm */
+  u8 pa_pxlen;                  /* Used in prefix assignment algorithm */
   list asp_list;                /* list of struct prefix_node.
                                    List of prefixes that have been assigned to this interface
                                    by us from a usable prefix */
@@ -638,10 +641,8 @@ struct ospf_lsa_ac_tlv /* Generic TLV */
 
 #define LSA_AC_USP_MIN_PREFIX_LENGTH   8
 #define LSA_AC_USP_MAX_PREFIX_LENGTH   64
-#define LSA_AC_ASP_MIN_PREFIX_LENGTH   64
 #define LSA_AC_ASP_D_PREFIX_LENGTH     64
-#define LSA_AC_ASP_D_SUB_PREFIX_LENGTH 80
-#define LSA_AC_ASP_MAX_PREFIX_LENGTH   128
+#define LSA_AC_ASP_SUB_PREFIX_LENGTH   80
 
 struct ospf_lsa_ac_tlv_v_usp /* One Usable Prefix */
 {
@@ -678,16 +679,17 @@ struct ospf_lsa_ac_tlv_v_iasp /* One Interface Assigned Prefixes */
   u32 id;
 #ifdef CPU_BIG_ENDIAN
   u8 pa_priority;
-  u8 reserved8;
-  u16 reserved16;
+  u8 reserved8_1;
+  u8 reserved8_2;
+  u8 pa_pxlen; // must be PA_PXLEN_D or PA_PXLEN_SUB
 #else
-  u16 reserved16;
-  u8 reserved8;
+  u8 pa_pxlen;
+  u8 reserved8_2;
+  u8 reserved8_1;
   u8 pa_priority;
 #endif
   u32 rest[]; // Assigned Prefix TLVs
 };
-
 
 #define LSA_EXT_EBIT 0x4000000
 #define LSA_EXT_FBIT 0x2000000
@@ -873,6 +875,7 @@ struct ospf_neighbor
   u32 csn;                      /* Last received crypt seq number (for MD5) */
 #ifdef OSPFv3
   u8 pa_priority;               /* Used in prefix assignment algorithm */
+  u8 pa_pxlen;                  /* Used in prefix assignment algorithm */
 #endif
 };
 
@@ -1006,6 +1009,7 @@ struct ospf_iface_patt
 #ifdef OSPFv3
   u8 instance_id;
   u8 pa_priority;
+  u8 pa_pxlen;
 #endif
 };
 
