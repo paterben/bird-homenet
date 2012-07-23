@@ -1144,11 +1144,11 @@ ospf_sh_asp(struct proto *p)
   }
   cli_msg(-1021, "");
 
-  cli_msg(-1021, "All assigned prefixes in LSADB");
+  cli_msg(-1021, "All assigned prefixes in reachable LSADB");
   cli_msg(-1021, "%-20s%-14s%-39s%-15s%-10s", "Advertising Router", "Interface ID", "Prefix", "Prefix Length", "Priority");
   WALK_SLIST(en, po->lsal)
   {
-    if(en->lsa.type == LSA_T_AC)
+    if(en->lsa.type == LSA_T_AC && ospf_lsa_ac_is_reachable(po, en))
     {
       ospf_sh_iasp_lsa(en);
     }

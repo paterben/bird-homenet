@@ -2014,6 +2014,13 @@ ospf_hash_find_rt_next(struct top_hash_entry *e)
   return find_matching_rt(e->next, e->domain, e->lsa.rt);
 }
 
+unsigned int
+ospf_lsa_ac_is_reachable(struct proto_ospf *po, struct top_hash_entry *en)
+{
+  struct top_hash_entry *rt = ospf_hash_find_rt(po->gr, en->domain, en->lsa.rt);
+  return rt->color == INSPF;
+}
+
 #endif
 
 

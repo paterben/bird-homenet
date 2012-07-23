@@ -97,6 +97,7 @@ struct top_hash_entry * ospf_hash_find_ac_lsa_first(struct top_graph *f, u32 dom
 struct top_hash_entry * ospf_hash_find_ac_lsa_next(struct top_hash_entry *e);
 struct top_hash_entry * ospf_hash_find_router_ac_lsa_first(struct top_graph *f, u32 domain, u32 rtr);
 struct top_hash_entry * ospf_hash_find_router_ac_lsa_next(struct top_hash_entry *e);
+unsigned int ospf_lsa_ac_is_reachable(struct proto_ospf *po, struct top_hash_entry *en);
 #endif
 
 

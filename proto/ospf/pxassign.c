@@ -358,11 +358,9 @@ ospf_pxassign_area(struct ospf_area *oa)
   //struct proto *p = &oa->po->proto;
   struct proto_ospf *po = oa->po;
   struct top_hash_entry *en;
-  struct ospf_lsa_ac_tlv *tlv;
   struct ospf_iface *ifa;
   struct prefix_node *asp;
-  unsigned int offset;
-  unsigned int size;
+  struct ospf_lsa_ac_tlv_v_usp *usp;
   int change = 0;
 
   //OSPF_TRACE(D_EVENTS, "Starting prefix assignment algorithm for AC LSAs in area %R", oa->areaid);
@@ -380,23 +378,17 @@ ospf_pxassign_area(struct ospf_area *oa)
   }
 
   // perform the prefix assignment algorithm on each (USP, iface) tuple
-  if((en = ospf_hash_find_ac_lsa_first(oa->po->gr, oa->areaid)) != NULL)
+  PARSE_LSA_AC_USP_START(usp,en)
   {
-    do {
-      size = en->lsa.length - sizeof(struct ospf_lsa_header);
-      offset = 0;
-      while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_USP)) != NULL)
+    WALK_LIST(ifa, po->iface_list)
+    {
+      if(ifa->oa == oa)
       {
-        WALK_LIST(ifa, po->iface_list)
-        {
-          if(ifa->oa == oa)
-          {
-            change |= ospf_pxassign_usp_ifa(ifa, (struct ospf_lsa_ac_tlv_v_usp *)(tlv->value));
-          }
-        }
+        change |= ospf_pxassign_usp_ifa(ifa, (struct ospf_lsa_ac_tlv_v_usp *)(usp));
       }
-    } while((en = ospf_hash_find_ac_lsa_next(en)) != NULL);
+    }
   }
+  PARSE_LSA_AC_USP_END(en);
 
   /* remove all this area's iface's invalid assignments */
   WALK_LIST(ifa, po->iface_list)
