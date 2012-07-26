@@ -1099,7 +1099,7 @@ ospf_sh_asp(struct proto *p)
   struct ospf_area *oa;
   struct ospf_iface *ifa;
   struct top_hash_entry *en;
-  struct ospf_lsa_ac_tlv_v_iasp *iasp;
+  struct ospf_lsa_ac_tlv_v_ifap *ifap;
   struct ospf_lsa_ac_tlv_v_asp *asp;
   struct prefix_node *n;
 
@@ -1121,11 +1121,11 @@ ospf_sh_asp(struct proto *p)
 
   WALK_LIST(oa, po->area_list)
   {
-    cli_msg(-1021, "All assigned prefixes in reachable LSADB for area %d", oa->areaid);
+    cli_msg(-1021, "All assigned prefixes in reachable LSADB for area %R", oa->areaid);
     cli_msg(-1021, "%-20s%-14s%-39s%-15s%-10s", "Advertising Router", "Interface ID", "Prefix", "Prefix Length", "Priority");
-    PARSE_LSA_AC_IASP_START(iasp,en)
+    PARSE_LSA_AC_IFAP_START(ifap,en)
     {
-      PARSE_LSA_AC_ASP_START(asp, iasp)
+      PARSE_LSA_AC_ASP_START(asp, ifap)
       {
         ip_addr addr;
         unsigned int len;
@@ -1133,11 +1133,11 @@ ospf_sh_asp(struct proto *p)
         u16 rest;
 
         lsa_get_ipv6_prefix((u32 *)(asp), &addr, &len, &pxopts, &rest);
-        cli_msg(-1021, "%-20R%-14d%-1I/%-14d%-10d", en->lsa.rt, iasp->id, addr, len, iasp->pa_priority);
+        cli_msg(-1021, "%-20R%-14d%-1I/%-14d%-10d", en->lsa.rt, ifap->id, addr, len, ifap->pa_priority);
       }
       PARSE_LSA_AC_ASP_END;
     }
-    PARSE_LSA_AC_IASP_END(en);
+    PARSE_LSA_AC_IFAP_END(en);
   }
 
   cli_msg(0, "");
@@ -1149,27 +1149,15 @@ ospf_sh_asp(struct proto *p)
 #endif
 }
 
-static void
-ospf_sh_pa_priorities_lsa(struct top_hash_entry *en)
-{
-  struct ospf_lsa_ac_tlv *tlv = en->lsa_body;
-  unsigned int size = en->lsa.length - sizeof(struct ospf_lsa_header);
-  unsigned int offset = 0;
-  while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_IASP)) != NULL)
-  {
-    struct ospf_lsa_ac_tlv_v_iasp *iasp = (struct ospf_lsa_ac_tlv_v_iasp *) tlv->value;
-
-    cli_msg(-1022, "%-20R%-14d%-10d", en->lsa.rt, iasp->id, iasp->pa_priority);
-  }
-}
-
 void
 ospf_sh_pa_priorities(struct proto *p)
 {
 #ifdef OSPFv3
   struct proto_ospf *po = (struct proto_ospf *) p;
+  struct ospf_area *oa;
   struct ospf_iface *ifa;
   struct top_hash_entry *en;
+  struct ospf_lsa_ac_tlv_v_ifap *ifap;
 
   if (p->proto_state != PS_UP)
   {
@@ -1178,21 +1166,22 @@ ospf_sh_pa_priorities(struct proto *p)
     return;
   }
   cli_msg(-1022, "Priorities of directly connected interfaces (may not yet be in LSADB)");
-  cli_msg(-1022, "%-20s%-14s%-10s", "Advertising Router", "Interface", "Priority");
+  cli_msg(-1022, "%-20s%-14s%-10s%-8s", "Advertising Router", "Interface", "Priority", "Length");
   WALK_LIST(ifa, po->iface_list)
   {
-    cli_msg(-1022, "%-20R%-14s%-10d", po->router_id, ifa->iface->name, ifa->pa_priority);
+    cli_msg(-1022, "%-20R%-14s%-10d%-8d", po->router_id, ifa->iface->name, ifa->pa_priority, ifa->pa_pxlen);
   }
   cli_msg(-1022, "");
 
-  cli_msg(-1022, "All interface priorities in LSADB");
-  cli_msg(-1022, "%-20s%-14s%-10s", "Advertising Router", "Interface ID", "Priority");
-  WALK_SLIST(en, po->lsal)
+  WALK_LIST(oa, po->area_list)
   {
-    if(en->lsa.type == LSA_T_AC)
+    cli_msg(-1022, "All interface priorities in reachable LSADB for area %R", oa->areaid);
+    cli_msg(-1022, "%-20s%-14s%-10s%-8s", "Advertising Router", "Interface ID", "Priority", "Length");
+    PARSE_LSA_AC_IFAP_START(ifap,en)
     {
-      ospf_sh_pa_priorities_lsa(en);
+      cli_msg(-1022, "%-20R%-14d%-10d%-8d", en->lsa.rt, ifap->id, ifap->pa_priority, ifap->pa_pxlen);
     }
+    PARSE_LSA_AC_IFAP_END(en);
   }
 
   cli_msg(0, "");
@@ -1204,33 +1193,15 @@ ospf_sh_pa_priorities(struct proto *p)
 #endif
 }
 
-static void
-ospf_sh_usp_lsa(struct top_hash_entry *en)
-{
-  struct ospf_lsa_ac_tlv *tlv = en->lsa_body;
-  unsigned int size = en->lsa.length - sizeof(struct ospf_lsa_header);
-  unsigned int offset = 0;
-  while((tlv = find_next_tlv(en->lsa_body, &offset, size, LSA_AC_TLV_T_USP)) != NULL)
-  {
-    struct ospf_lsa_ac_tlv_v_usp *usp = (struct ospf_lsa_ac_tlv_v_usp *) tlv->value;
-    ip_addr addr;
-    unsigned int len;
-    u8 pxopts;
-    u16 rest;
-
-    lsa_get_ipv6_prefix((u32 *)usp, &addr, &len, &pxopts, &rest);
-    cli_msg(-1020, "%-20R%-1I/%-14d", en->lsa.rt, addr, len);
-  }
-}
-
 void
 ospf_sh_usp(struct proto *p)
 {
 #ifdef OSPFv3
   struct proto_ospf *po = (struct proto_ospf *) p;
-  //struct ospf_area *oa;
+  struct ospf_area *oa;
   struct prefix_node *pxn;
   struct top_hash_entry *en;
+  struct ospf_lsa_ac_tlv_v_usp *usp;
 
   if (p->proto_state != PS_UP)
   {
@@ -1256,14 +1227,22 @@ ospf_sh_usp(struct proto *p)
   }
   cli_msg(-1020, "");
 
-  cli_msg(-1020, "All Usable Prefixes in LSADB");
-  cli_msg(-1020, "%-20s%-39s%-15s", "Advertising Router", "Prefix", "Prefix Length");
-  WALK_SLIST(en, po->lsal)
+  WALK_LIST(oa, po->area_list)
   {
-    if(en->lsa.type == LSA_T_AC)
+    cli_msg(-1020, "All Usable Prefixes in reachable LSADB for area %R", oa->areaid);
+    cli_msg(-1020, "%-20s%-39s%-15s", "Advertising Router", "Prefix", "Prefix Length");
+
+    PARSE_LSA_AC_USP_START(usp,en)
     {
-      ospf_sh_usp_lsa(en);
+      ip_addr addr;
+      unsigned int len;
+      u8 pxopts;
+      u16 rest;
+
+      lsa_get_ipv6_prefix((u32 *)usp, &addr, &len, &pxopts, &rest);
+      cli_msg(-1020, "%-20R%-1I/%-14d", en->lsa.rt, addr, len);
     }
+    PARSE_LSA_AC_USP_END(en);
   }
 
   /* for debugging purposes: show our own usp_list */

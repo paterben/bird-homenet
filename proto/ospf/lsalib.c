@@ -492,7 +492,7 @@ lsa_validate_ac_tlv_usp(u8 *tlvh)
 }
 
 static int
-lsa_validate_ac_tlv_asp(u8 *tlvh)
+lsa_validate_ac_tlv_asp(u8 *tlvh, u8 pa_pxlen)
 {
   struct ospf_lsa_ac *tlvheader = (struct ospf_lsa_ac *) tlvh;
 
@@ -501,7 +501,7 @@ lsa_validate_ac_tlv_asp(u8 *tlvh)
 
   struct ospf_lsa_ac_tlv_v_asp *tlv = (struct ospf_lsa_ac_tlv_v_asp *) (tlvh + sizeof(struct ospf_lsa_ac));
 
-  if(tlv->pxlen != LSA_AC_ASP_D_PREFIX_LENGTH && tlv->pxlen != LSA_AC_ASP_SUB_PREFIX_LENGTH)
+  if(tlv->pxlen != pa_pxlen) // prefix length must match that advertised in the Interface Prefixes TLV
     return 0;
 
   /* FIXME other tests on prefix / interface ID? */
@@ -510,26 +510,26 @@ lsa_validate_ac_tlv_asp(u8 *tlvh)
 }
 
 static int
-lsa_validate_ac_tlv_iasp(u8 *tlvh)
+lsa_validate_ac_tlv_ifap(u8 *tlvh)
 {
   struct ospf_lsa_ac *tlvheader = (struct ospf_lsa_ac *) tlvh;
 
-  if(tlvheader->length < LSA_AC_IASP_OFFSET) //IID + Options field
+  if(tlvheader->length < LSA_AC_IFAP_OFFSET) //IID + Options field
     return 0;
 
-  struct ospf_lsa_ac_tlv_v_iasp *iasp = (struct ospf_lsa_ac_tlv_v_iasp *) (tlvh + sizeof(struct ospf_lsa_ac));
+  struct ospf_lsa_ac_tlv_v_ifap *ifap = (struct ospf_lsa_ac_tlv_v_ifap *) (tlvh + sizeof(struct ospf_lsa_ac));
 
-  if(iasp->pa_priority == 0) // reserved value
+  if(ifap->pa_priority == 0) // reserved value
     return 0;
 
-  if(iasp->pa_pxlen != PA_PXLEN_D && iasp->pa_pxlen != PA_PXLEN_SUB)
+  if(ifap->pa_pxlen != PA_PXLEN_D && ifap->pa_pxlen != PA_PXLEN_SUB)
     return 0;
 
-  unsigned int offset = LSA_AC_IASP_OFFSET;
+  unsigned int offset = LSA_AC_IFAP_OFFSET;
   unsigned int bound = tlvheader->length - 4;
   unsigned int size = tlvheader->length;
 
-  u8 *body = (u8 *) iasp;
+  u8 *body = (u8 *) ifap;
 
   while (offset <= bound)
   {
@@ -539,7 +539,7 @@ lsa_validate_ac_tlv_iasp(u8 *tlvh)
     switch(((struct ospf_lsa_ac *)(body + offset))->type)
     {
       case LSA_AC_TLV_T_ASP:
-        if(!lsa_validate_ac_tlv_asp(body + offset))
+        if(!lsa_validate_ac_tlv_asp(body + offset, ifap->pa_pxlen))
           return 0;
         break;
       default:
@@ -575,12 +575,12 @@ lsa_validate_ac(struct ospf_lsa_header *lsa, struct ospf_lsa_ac *body)
           if(!lsa_validate_ac_tlv_usp(tlv + offset))
             return 0;
           break;
-        case LSA_AC_TLV_T_IASP:
-          if(!lsa_validate_ac_tlv_iasp(tlv + offset))
+        case LSA_AC_TLV_T_IFAP:
+          if(!lsa_validate_ac_tlv_ifap(tlv + offset))
             return 0;
           break;
         case LSA_AC_TLV_T_ASP:
-          return 0; //must be nested in IASP TLVs
+          return 0; //must be nested in IFAP TLVs
           break;
         default:
           break;

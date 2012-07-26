@@ -251,24 +251,20 @@ struct ospf_iface
   s16 px_pos_end;		/* Position of iface in Rt Prefix-LSA, end, exclusive */
 
   u32 dr_iface_id;		/* if drid is valid, this is iface_id of DR (for connecting network) */
-#define OSPF_HOMENET_IID = 240  /* Instance ID of interfaces running OSPF Auto-Configuration. See RFC TBD */
- /* IID 240(0xF0): unassigned by IANA */
   u8 instance_id;		/* Used to differentiate between more OSPF
 				   instances on one interface */
 #define PA_PRIORITY_MIN 1
 #define PA_PRIORITY_D 10
 #define PA_PRIORITY_MAX 255
-#define PA_PXLEN_D LSA_AC_ASP_D_PREFIX_LENGTH
-#define PA_PXLEN_SUB LSA_AC_ASP_SUB_PREFIX_LENGTH
   u8 pa_priority;               /* Used in prefix assignment algorithm */
   u8 pa_pxlen;                  /* Used in prefix assignment algorithm */
   list asp_list;                /* list of struct prefix_node.
                                    List of prefixes that have been assigned to this interface
                                    by us from a usable prefix */
-  /*list asp_list_noresp;*/         /* list of struct prefix_node.
+  /*list asp_list_noresp;*/     /* list of struct prefix_node.
                                    List of prefixes that have been assigned to this interface by another router
                                    on the link. */
-  list usp_list;                /* list of struct ospf_usp.
+  /*list usp_list;*/            /* list of struct ospf_usp.
                                    Each node corresponds to one Usable Prefix learned via OSPF,
                                    a pointer to the current interface and a timer for prefix assignment.
                                    See RFC TBD /
@@ -620,7 +616,7 @@ struct ospf_lsa_ac /* must contain at least one TLV */
 #define LSA_AC_TLV_T_RHWF 1/* Router-Hardware-Fingerprint */
 #define LSA_AC_TLV_T_USP  2 /* Usable Prefix */
 #define LSA_AC_TLV_T_ASP  3 /* Assigned Prefix */
-#define LSA_AC_TLV_T_IASP 4 /* Interface Assigned Prefixes */
+#define LSA_AC_TLV_T_IFAP 4 /* Interface Prefixes */
 
 /* If x is the length of the TLV as specified in its
    Length field, returns the number of bytes used to
@@ -641,8 +637,8 @@ struct ospf_lsa_ac_tlv /* Generic TLV */
 
 #define LSA_AC_USP_MIN_PREFIX_LENGTH   8
 #define LSA_AC_USP_MAX_PREFIX_LENGTH   64
-#define LSA_AC_ASP_D_PREFIX_LENGTH     64
-#define LSA_AC_ASP_SUB_PREFIX_LENGTH   80
+#define PA_PXLEN_D                     64
+#define PA_PXLEN_SUB                   80
 
 struct ospf_lsa_ac_tlv_v_usp /* One Usable Prefix */
 {
@@ -672,9 +668,9 @@ struct ospf_lsa_ac_tlv_v_asp /* One Assigned Prefix */
   u32 prefix[];
 };
 
-#define LSA_AC_IASP_OFFSET (2 * sizeof(u32)) //offset to first Assigned Prefix TLV
+#define LSA_AC_IFAP_OFFSET (2 * sizeof(u32)) //offset to first Assigned Prefix TLV
 
-struct ospf_lsa_ac_tlv_v_iasp /* One Interface Assigned Prefixes */
+struct ospf_lsa_ac_tlv_v_ifap /* One Interface Prefixes */
 {
   u32 id;
 #ifdef CPU_BIG_ENDIAN

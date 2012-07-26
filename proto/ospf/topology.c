@@ -1534,17 +1534,17 @@ add_asp_tlvs(struct ospf_iface *ifa)
 }
 
 /**
- * add_iasp_tlvs - Adds Interface Assigned Prefix TLVs to LSA buffer
+ * add_ifap_tlvs - Adds Interface Prefixes TLVs to LSA buffer
  * @oa: Only assigned prefixes in this area will be advertised.
  *
  * This function is called by originate_ac_lsa_body.
  */
 static void
-add_iasp_tlvs(struct ospf_area *oa)
+add_ifap_tlvs(struct ospf_area *oa)
 {
   struct proto_ospf *po = oa->po;
   struct ospf_lsa_ac_tlv *asp;
-  struct ospf_lsa_ac_tlv_v_iasp *iasp;
+  struct ospf_lsa_ac_tlv_v_ifap *ifap;
   struct ospf_iface *ifa;
   int offset;
 
@@ -1555,13 +1555,13 @@ add_iasp_tlvs(struct ospf_area *oa)
     {
       offset = po->lsab_used;
       asp = lsab_alloc(po, sizeof(struct ospf_lsa_ac));
-      asp->type = LSA_AC_TLV_T_IASP;
-      iasp = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_v_iasp));
-      iasp->id = ifa->iface->index;
-      iasp->pa_priority = ifa->pa_priority;
-      iasp->reserved8_1 = 0;
-      iasp->reserved8_2 = 0;
-      iasp->pa_pxlen = ifa->pa_pxlen;
+      asp->type = LSA_AC_TLV_T_IFAP;
+      ifap = lsab_alloc(po, sizeof(struct ospf_lsa_ac_tlv_v_ifap));
+      ifap->id = ifa->iface->index;
+      ifap->pa_priority = ifa->pa_priority;
+      ifap->reserved8_1 = 0;
+      ifap->reserved8_2 = 0;
+      ifap->pa_pxlen = ifa->pa_pxlen;
 
       add_asp_tlvs(ifa);
 
@@ -1673,7 +1673,7 @@ originate_ac_lsa_body(struct ospf_area *oa, u16 *length)
   // offset = po->lsab_used;
   // ASSERT...
 
-  add_iasp_tlvs(oa);
+  add_ifap_tlvs(oa);
   // offset = po->lsab_used;
   // ASSERT...
 
@@ -2019,7 +2019,7 @@ unsigned int
 ospf_lsa_ac_is_reachable(struct proto_ospf *po, struct top_hash_entry *en)
 {
   struct top_hash_entry *rt = ospf_hash_find_rt(po->gr, en->domain, en->lsa.rt);
-  return rt->color == INSPF;
+  return (rt && rt->color == INSPF);
 }
 
 #endif

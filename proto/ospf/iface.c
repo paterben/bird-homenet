@@ -574,7 +574,7 @@ ospf_iface_new(struct ospf_area *oa, struct ifa *addr, struct ospf_iface_patt *i
   init_list(&ifa->neigh_list);
   init_list(&ifa->nbma_list);
 #ifdef OSPFv3
-  init_list(&ifa->usp_list);
+  //init_list(&ifa->usp_list);
   init_list(&ifa->asp_list);
   //init_list(&ifa->asp_list_noresp);
 #endif
